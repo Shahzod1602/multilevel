@@ -1,0 +1,10 @@
+python-telegram-bot>=20.0
+openai>=0.27.0
+python-dotenv
+gTTS
+openai-whisper
+aiohttp
+apscheduler
+fastapi
+uvicorn[standard]
+python-multipart

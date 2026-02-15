@@ -11,13 +11,17 @@ import sqlite3
 import tempfile
 import subprocess
 from datetime import datetime, timedelta
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InputFile, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InputFile, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 import openai
 from gtts import gTTS
 import whisper
 import re
 import math
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Global for bot username
 BOT_USERNAME = None
@@ -33,10 +37,11 @@ logging.basicConfig(
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-# Load credentials
-TELEGRAM_TOKEN = "7611936523:AAE3mT80rJCkIehlxyPT2ZDtkugqF98AHoI"
-OPENAI_KEY = "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"
-CHANNEL_USERNAME = "@IELTSPEAK_bot"  # Replace with your channel username (e.g., @your_channel)
+# Load credentials from .env
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+OPENAI_KEY = os.getenv("OPENAI_API_KEY")
+CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "@IELTSPEAK_bot")
+WEBAPP_URL = os.getenv("WEBAPP_URL", "")
 
 if not TELEGRAM_TOKEN or not OPENAI_KEY:
     logging.error("Missing TELEGRAM_BOT_TOKEN or OPENAI_API_KEY")
@@ -282,6 +287,16 @@ async def check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 "🎤 Welcome to IELTS Speaking Practice! Click 'Start Exam'.",
                 reply_markup=reply_markup
             )
+            # Also show Open App button if WEBAPP_URL is set
+            if WEBAPP_URL:
+                inline_kb = [[InlineKeyboardButton(
+                    "📱 Open App",
+                    web_app=WebAppInfo(url=WEBAPP_URL)
+                )]]
+                await update.effective_message.reply_text(
+                    "Or open the full practice app:",
+                    reply_markup=InlineKeyboardMarkup(inline_kb)
+                )
         else:
             # Not subscribed, prompt to subscribe
             await show_subscription_prompt(update, context)
@@ -1085,21 +1100,4 @@ async def main():
         await application.shutdown()
 
 if __name__ == '__main__':
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # If an event loop is already running, create a new task
-            asyncio.ensure_future(main())
-        else:
-            loop.run_until_complete(main())
-    except RuntimeError as e:
-        if "no running event loop" in str(e):
-            # If no loop exists, create a new one
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(main())
-        else:
-            raise
-    finally:
-        if not loop.is_closed():
-            loop.close()
+    asyncio.run(main())

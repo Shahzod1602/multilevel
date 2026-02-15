@@ -1,0 +1,41 @@
+services:
+  app:
+    build: .
+    container_name: ielts-app
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./bot.db:/app/bot.db
+    ports:
+      - "8080:8080"
+    networks:
+      - web
+
+  nginx:
+    image: nginx:alpine
+    container_name: ielts-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./certbot/www:/var/www/certbot:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+    depends_on:
+      - app
+    networks:
+      - web
+
+  certbot:
+    image: certbot/certbot
+    container_name: ielts-certbot
+    volumes:
+      - ./certbot/www:/var/www/certbot
+      - ./certbot/conf:/etc/letsencrypt
+    networks:
+      - web
+
+networks:
+  web:
+    driver: bridge
