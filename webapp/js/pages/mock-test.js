@@ -9,7 +9,9 @@ const MockTestPage = {
     responses: [],
     state: 'idle',
     showTranscription: true,
-    selectedVoice: null,  // null = no TTS, or 'sarah','lily','charlie','roger'
+    selectedVoice: null,
+    level: 'intermediate',
+    mood: 'normal',
     recordingStartTime: null,
     autoAdvanceTimer: null,
     currentAudio: null,
@@ -21,6 +23,8 @@ const MockTestPage = {
         this.state = 'idle';
         this.showTranscription = true;
         this.selectedVoice = null;
+        this.level = 'intermediate';
+        this.mood = 'normal';
         this.recordingStartTime = null;
         this.clearAutoAdvance();
 
@@ -45,16 +49,28 @@ const MockTestPage = {
 
             this.renderIntro(container);
         } catch (err) {
+            const isLimit = err.message.includes('Daily limit');
             container.innerHTML = `
                 <div class="page-header">
                     <button class="back-btn" id="back-btn">&#8592;</button>
-                    <h2>Error</h2>
+                    <h2>${isLimit ? 'Limit Reached' : 'Error'}</h2>
                 </div>
-                <div class="card text-center">
-                    <p class="text-secondary">${err.message}</p>
-                </div>
+                ${isLimit ? `
+                    <div class="upgrade-prompt">
+                        <div class="upgrade-icon">&#128274;</div>
+                        <h3>Daily Limit Reached</h3>
+                        <p>You've used all 3 free sessions today.</p>
+                        <p class="mt-8">Upgrade to <strong>Premium</strong> for unlimited practice!</p>
+                        <button class="btn btn-primary mt-12" id="home-btn">Back to Home</button>
+                    </div>
+                ` : `
+                    <div class="card text-center">
+                        <p class="text-secondary">${err.message}</p>
+                    </div>
+                `}
             `;
             container.querySelector('#back-btn').addEventListener('click', () => App.navigate('home'));
+            container.querySelector('#home-btn')?.addEventListener('click', () => App.navigate('home'));
         }
     },
 
@@ -124,10 +140,38 @@ const MockTestPage = {
                 </div>
             </div>
 
+            <div class="card mt-12">
+                <h3>Examiner Mood</h3>
+                <p class="text-secondary text-sm mt-4">How is the examiner feeling today?</p>
+                <div class="mood-selector mt-12">
+                    <button class="mood-btn" data-mood="happy">
+                        <span class="mood-emoji">😊</span>
+                        <span class="mood-label">Happy</span>
+                    </button>
+                    <button class="mood-btn active" data-mood="normal">
+                        <span class="mood-emoji">😐</span>
+                        <span class="mood-label">Normal</span>
+                    </button>
+                    <button class="mood-btn" data-mood="angry">
+                        <span class="mood-emoji">😠</span>
+                        <span class="mood-label">Angry</span>
+                    </button>
+                </div>
+            </div>
+
             <button class="btn btn-primary mt-16" id="start-btn">Start Test</button>
         `;
 
         container.querySelector('#back-btn').addEventListener('click', () => App.navigate('home'));
+
+        // Mood selector
+        container.querySelectorAll('.mood-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                container.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.mood = btn.dataset.mood;
+            });
+        });
 
         // Transcription toggle
         const toggle = container.querySelector('#transcription-toggle');
@@ -156,8 +200,11 @@ const MockTestPage = {
         });
     },
 
+    prepTimer: null,
+
     renderQuestion(container) {
         this.clearAutoAdvance();
+        if (this.prepTimer) { clearInterval(this.prepTimer); this.prepTimer = null; }
         const questions = this.allQuestions[this.currentPart] || [];
         if (this.currentIndex >= questions.length) {
             if (this.currentPart < 3) {
@@ -172,6 +219,26 @@ const MockTestPage = {
 
         const q = questions[this.currentIndex];
         const totalQ = questions.length;
+        const isCueCard = this.currentPart === 2;
+
+        const questionHtml = isCueCard
+            ? `<div class="cue-card">
+                <span class="part-badge">Part 2 - Cue Card</span>
+                <p class="question-text mt-12">${q.question}</p>
+                <div class="cue-bullets mt-12">
+                    <p class="cue-label">You should say:</p>
+                    <ul>
+                        <li>what it is / who it is</li>
+                        <li>when and where it happened</li>
+                        <li>how you felt about it</li>
+                        <li>and explain why it is important to you</li>
+                    </ul>
+                </div>
+              </div>`
+            : `<div class="question-card">
+                <span class="part-badge">Part ${this.currentPart} - Q${this.currentIndex + 1}/${totalQ}</span>
+                <p class="question-text mt-12">${q.question}</p>
+              </div>`;
 
         container.innerHTML = `
             <div class="page-header">
@@ -180,12 +247,11 @@ const MockTestPage = {
                 <button class="finish-test-btn" id="finish-btn">Finish</button>
             </div>
 
-            <div class="question-card">
-                <span class="part-badge">Part ${this.currentPart} - Q${this.currentIndex + 1}/${totalQ}</span>
-                <p class="question-text mt-12">${q.question}</p>
-            </div>
+            ${questionHtml}
 
-            <div class="recorder-area">
+            ${isCueCard ? '<div id="prep-timer-area"></div>' : ''}
+
+            <div class="recorder-area ${isCueCard ? 'hidden' : ''}" id="recorder-area">
                 <button class="record-btn" id="record-btn">
                     <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
@@ -202,12 +268,14 @@ const MockTestPage = {
 
         container.querySelector('#back-btn').addEventListener('click', () => {
             this.clearAutoAdvance();
+            if (this.prepTimer) { clearInterval(this.prepTimer); this.prepTimer = null; }
             if (Recorder.isRecording()) Recorder.stop();
             App.navigate('home');
         });
 
         container.querySelector('#finish-btn').addEventListener('click', () => {
             this.clearAutoAdvance();
+            if (this.prepTimer) { clearInterval(this.prepTimer); this.prepTimer = null; }
             if (Recorder.isRecording()) Recorder.stop();
             if (this.responses.length > 0) {
                 this.showResults(container);
@@ -218,6 +286,45 @@ const MockTestPage = {
 
         this.setupRecordBtn(container);
         this.playQuestion(q.question);
+
+        if (isCueCard) {
+            this.startPrepTimer(container);
+        }
+    },
+
+    startPrepTimer(container) {
+        const prepArea = container.querySelector('#prep-timer-area');
+        const recorderArea = container.querySelector('#recorder-area');
+        let seconds = 60;
+
+        prepArea.innerHTML = `
+            <div class="prep-countdown">
+                <div class="prep-label">Preparation Time</div>
+                <div class="prep-time" id="prep-time">1:00</div>
+                <p class="text-sm text-secondary">Think about what you want to say</p>
+                <button class="btn btn-outline mt-12" id="skip-prep">Skip & Start Speaking</button>
+            </div>
+        `;
+
+        const endPrep = () => {
+            if (this.prepTimer) { clearInterval(this.prepTimer); this.prepTimer = null; }
+            prepArea.innerHTML = '';
+            recorderArea.classList.remove('hidden');
+        };
+
+        container.querySelector('#skip-prep').addEventListener('click', endPrep);
+
+        this.prepTimer = setInterval(() => {
+            seconds--;
+            if (seconds <= 0) {
+                endPrep();
+            } else {
+                const m = Math.floor(seconds / 60);
+                const s = seconds % 60;
+                const el = container.querySelector('#prep-time');
+                if (el) el.textContent = `${m}:${s.toString().padStart(2, '0')}`;
+            }
+        }, 1000);
     },
 
     async playQuestion(text) {
@@ -361,10 +468,14 @@ const MockTestPage = {
             });
 
             if (this.showTranscription) {
+                const words = result.transcription.split(/\s+/).filter(w => w.length > 0).length;
+                const wpm = result.duration > 0 ? Math.round((words / result.duration) * 60) : 0;
+
                 transcriptionArea.innerHTML = `
                     <div class="transcription-card">
                         <h3>Your Response</h3>
                         <p class="text">${result.transcription}</p>
+                        <p class="wpm-stats mt-8">${words} words · ${wpm} WPM · ${result.duration}s</p>
                     </div>
                 `;
             } else {
@@ -390,8 +501,10 @@ const MockTestPage = {
 
     showNextWithAutoAdvance(actionArea, container) {
         let countdown = 5;
+        const showFollowUp = this.currentPart === 3;
 
         actionArea.innerHTML = `
+            ${showFollowUp ? '<button class="btn btn-outline mt-12" id="followup-btn">Get Follow-up Question</button>' : ''}
             <button class="btn btn-primary mt-12" id="next-btn">Next <span id="countdown-text">(${countdown}s)</span></button>
         `;
 
@@ -406,6 +519,39 @@ const MockTestPage = {
         };
 
         nextBtn.addEventListener('click', goNext);
+
+        if (showFollowUp) {
+            actionArea.querySelector('#followup-btn').addEventListener('click', async () => {
+                this.clearAutoAdvance();
+                const followBtn = actionArea.querySelector('#followup-btn');
+                followBtn.textContent = 'Generating...';
+                followBtn.disabled = true;
+                // Remove countdown during follow-up
+                const countdownEl = actionArea.querySelector('#countdown-text');
+                if (countdownEl) countdownEl.textContent = '';
+                try {
+                    const q = this.allQuestions[this.currentPart][this.currentIndex];
+                    const lastResponse = this.responses[this.responses.length - 1];
+                    const fuResult = await API.post('/api/follow-up', {
+                        question: q.question,
+                        answer: lastResponse?.transcription || '',
+                        part: 3,
+                    });
+                    followBtn.remove();
+                    const fuDiv = document.createElement('div');
+                    fuDiv.className = 'followup-card mt-12';
+                    fuDiv.innerHTML = `
+                        <h3>Follow-up Question</h3>
+                        <p class="question-text">${fuResult.follow_up_question}</p>
+                        <p class="text-xs text-secondary mt-8">Answer or skip to next</p>
+                    `;
+                    actionArea.insertBefore(fuDiv, nextBtn);
+                } catch (e) {
+                    followBtn.textContent = 'Failed';
+                    followBtn.disabled = false;
+                }
+            });
+        }
 
         this.autoAdvanceTimer = setInterval(() => {
             countdown--;
@@ -424,12 +570,46 @@ const MockTestPage = {
         }
     },
 
+    renderGrammarCorrections(corrections) {
+        if (!corrections || !corrections.length) return '';
+        const items = corrections.map(c => `
+            <div class="grammar-item">
+                <div class="grammar-original">${c.original}</div>
+                <div class="grammar-arrow">&#8594;</div>
+                <div class="grammar-corrected">${c.corrected}</div>
+                <div class="grammar-explanation">${c.explanation}</div>
+            </div>
+        `).join('');
+        return `
+            <div class="grammar-card">
+                <h3>Grammar Corrections</h3>
+                ${items}
+            </div>
+        `;
+    },
+
+    renderPronunciationTips(issues) {
+        if (!issues || !issues.length) return '';
+        const items = issues.map(i => `
+            <div class="pron-item">
+                <span class="pron-word">${i.word}</span>
+                <span class="pron-tip">${i.tip}</span>
+            </div>
+        `).join('');
+        return `
+            <div class="pronunciation-card">
+                <h3>Pronunciation Tips</h3>
+                ${items}
+            </div>
+        `;
+    },
+
     async showResults(container) {
         this.clearAutoAdvance();
         container.innerHTML = `<div class="loading"><div class="spinner"></div><span>Generating feedback...</span></div>`;
 
         try {
-            const result = await API.post(`/api/sessions/${this.sessionId}/complete`);
+            const result = await API.post(`/api/sessions/${this.sessionId}/complete`, { level: this.level, mood: this.mood });
             const scores = result.scores || {};
 
             container.innerHTML = `
@@ -468,8 +648,33 @@ const MockTestPage = {
                     <p class="text">${result.feedback || 'No detailed feedback.'}</p>
                 </div>
 
+                ${this.renderGrammarCorrections(result.grammar_corrections)}
+                ${this.renderPronunciationTips(result.pronunciation_issues)}
+
+                <div id="sample-answer-area"></div>
+
                 <button class="btn btn-primary mt-12" id="home-btn">Back to Home</button>
             `;
+
+            // Sample answer button
+            const sampleArea = container.querySelector('#sample-answer-area');
+            sampleArea.innerHTML = `<button class="btn btn-sample mt-12" id="sample-btn">Show Sample Answer</button>`;
+            container.querySelector('#sample-btn').addEventListener('click', async () => {
+                sampleArea.innerHTML = `<div class="loading"><div class="spinner"></div><span>Generating sample...</span></div>`;
+                try {
+                    const firstQ = this.allQuestions[1]?.[0] || this.allQuestions[2]?.[0] || this.allQuestions[3]?.[0];
+                    if (!firstQ) throw new Error('No question');
+                    const sampleResult = await API.post('/api/sample-answer', { question: firstQ.question, part: 2 });
+                    sampleArea.innerHTML = `
+                        <div class="sample-card">
+                            <h3>Sample Answer (Band 7+)</h3>
+                            <p class="text">${sampleResult.sample_answer}</p>
+                        </div>
+                    `;
+                } catch (e) {
+                    sampleArea.innerHTML = `<div class="card"><p class="text-secondary">Failed to load sample answer.</p></div>`;
+                }
+            });
 
             container.querySelector('#back-btn').addEventListener('click', () => App.navigate('home'));
             container.querySelector('#home-btn').addEventListener('click', () => App.navigate('home'));

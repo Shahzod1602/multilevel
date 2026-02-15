@@ -131,11 +131,13 @@ class SettingsUpdate(BaseModel):
     notifications: Optional[bool] = None
     language: Optional[str] = None
     daily_goal: Optional[int] = None
+    target_score: Optional[float] = None
 
 
 class SessionStart(BaseModel):
     type: str = "practice"
     part: int = 1
+    topic: Optional[str] = None
 
 
 # ─── Debug Endpoint ───────────────────────────────────────────
@@ -198,6 +200,8 @@ async def update_settings(body: SettingsUpdate, user=Depends(get_current_user)):
         updates["language"] = body.language
     if body.daily_goal is not None:
         updates["daily_goal"] = body.daily_goal
+    if body.target_score is not None:
+        updates["target_score"] = body.target_score
 
     if updates:
         db.update_user_settings(user["user_id"], **updates)
@@ -211,13 +215,50 @@ async def get_questions(part: int = 1, user=Depends(get_current_user)):
     return {"questions": filtered, "total": len(filtered)}
 
 
+@app.get("/api/session-info")
+async def session_info(user=Depends(get_current_user)):
+    today_count = db.get_daily_sessions_count(user["user_id"])
+    tariff = user.get("tariff", "free")
+    is_premium = tariff != "free"
+    remaining = None if is_premium else max(0, FREE_DAILY_LIMIT - today_count)
+    return {
+        "today_count": today_count,
+        "daily_limit": FREE_DAILY_LIMIT,
+        "remaining": remaining,
+        "is_premium": is_premium,
+        "tariff": tariff,
+    }
+
+
+@app.get("/api/topics")
+async def get_topics(part: int = 1, user=Depends(get_current_user)):
+    filtered = [q for q in QUESTIONS if q.get("part") == part]
+    topics = sorted(set(q.get("topic", "General") for q in filtered))
+    return {"topics": topics, "total": len(topics)}
+
+
+FREE_DAILY_LIMIT = 3
+
 @app.post("/api/sessions/start")
 async def start_session(body: SessionStart, user=Depends(get_current_user)):
+    # Check daily limit for free users
+    if user.get("tariff", "free") == "free":
+        today_count = db.get_daily_sessions_count(user["user_id"])
+        if today_count >= FREE_DAILY_LIMIT:
+            raise HTTPException(
+                403,
+                f"Daily limit reached ({FREE_DAILY_LIMIT} sessions). Upgrade to Premium for unlimited practice!"
+            )
+
     session_id = db.create_session(user["user_id"], body.type, body.part)
 
     # Pick questions for this session
     part = body.part
     filtered = [q for q in QUESTIONS if q.get("part") == part]
+    if body.topic:
+        topic_filtered = [q for q in filtered if q.get("topic") == body.topic]
+        if topic_filtered:
+            filtered = topic_filtered
     import random
     if part == 1:
         questions = random.sample(filtered, min(4, len(filtered)))
@@ -318,8 +359,12 @@ async def session_respond(
                 pass
 
 
+class CompleteRequest(BaseModel):
+    level: str = "intermediate"
+    mood: str = "normal"
+
 @app.post("/api/sessions/{session_id}/complete")
-async def complete_session(session_id: int, user=Depends(get_current_user)):
+async def complete_session(session_id: int, body: CompleteRequest = CompleteRequest(), user=Depends(get_current_user)):
     session = db.get_session(session_id)
     if not session:
         raise HTTPException(404, "Session not found")
@@ -330,15 +375,65 @@ async def complete_session(session_id: int, user=Depends(get_current_user)):
     if not responses:
         raise HTTPException(400, "No responses in session")
 
+    # Level-based scoring instructions
+    level_instructions = {
+        "beginner": (
+            "You are scoring a BEGINNER-level English learner (A2-B1). "
+            "Be encouraging and lenient. Focus on what they did well. "
+            "Give scores that reflect their effort — even simple but clear answers deserve 5.0-6.0. "
+            "Only give below 4.0 if the response is mostly unintelligible. "
+            "Provide constructive, simple feedback with easy-to-understand suggestions."
+        ),
+        "intermediate": (
+            "You are scoring an INTERMEDIATE-level English learner (B1-B2). "
+            "Apply standard IELTS scoring criteria fairly. "
+            "Acknowledge strengths while pointing out areas for improvement. "
+            "Most responses at this level should score between 5.0-7.0."
+        ),
+        "advanced": (
+            "You are scoring an ADVANCED-level English learner (C1-C2). "
+            "Be strict and apply rigorous IELTS scoring standards. "
+            "Expect sophisticated vocabulary, complex grammar, natural fluency, and clear pronunciation. "
+            "Deduct for any hesitation, repetition, limited vocabulary, or grammatical errors. "
+            "Only give 7.0+ for truly excellent performance. Provide detailed, critical feedback."
+        ),
+    }
+
+    level = body.level if body.level in level_instructions else "intermediate"
+    level_text = level_instructions[level]
+
+    mood_instructions = {
+        "happy": (
+            "You are in a HAPPY, generous mood today. "
+            "You see the best in every answer. Add +0.5 bonus to each score criterion. "
+            "Your feedback should be very positive and encouraging, highlighting strengths."
+        ),
+        "normal": "",
+        "angry": (
+            "You are in a STRICT, harsh mood today. "
+            "You are very critical of every mistake. Deduct 1.0 point from each score criterion. "
+            "Your feedback should be blunt and focus heavily on errors and weaknesses."
+        ),
+    }
+    mood = body.mood if body.mood in mood_instructions else "normal"
+    mood_text = mood_instructions[mood]
+
     # Build GPT prompt
+    mood_section = f"{mood_text}\n\n" if mood_text else ""
     prompt = (
-        "You are a certified IELTS Speaking examiner. Analyze the following responses.\n"
+        f"You are a certified IELTS Speaking examiner.\n"
+        f"{level_text}\n\n"
+        f"{mood_section}"
+        "Analyze the following responses.\n"
         "Score each criterion 0-9 (half-points allowed):\n"
         "1. Fluency and Coherence\n2. Lexical Resource\n"
         "3. Grammatical Range and Accuracy\n4. Pronunciation\n\n"
         "Return ONLY valid JSON (no markdown, no code fences) in this format:\n"
         '{"fluency": 6.5, "lexical": 6.0, "grammar": 5.5, "pronunciation": 6.0, '
-        '"overall": 6.0, "feedback": "Your detailed feedback here."}\n\n'
+        '"overall": 6.0, "feedback": "Your detailed feedback here.", '
+        '"grammar_corrections": [{"original": "wrong phrase", "corrected": "correct phrase", "explanation": "brief reason"}], '
+        '"pronunciation_issues": [{"word": "word", "tip": "pronunciation tip"}]}\n\n'
+        "Include up to 5 grammar corrections and up to 3 pronunciation tips.\n\n"
         "Responses:\n"
     )
 
@@ -359,7 +454,7 @@ async def complete_session(session_id: int, user=Depends(get_current_user)):
                 {"role": "system", "content": "You are a certified IELTS Speaking examiner. Return only valid JSON."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=500,
+            max_tokens=800,
             temperature=0.5,
         )
         content = response.choices[0].message.content.strip()
@@ -377,12 +472,16 @@ async def complete_session(session_id: int, user=Depends(get_current_user)):
             "overall": scores_data.get("overall", 0),
         }
         feedback = scores_data.get("feedback", "")
+        grammar_corrections = scores_data.get("grammar_corrections", [])
+        pronunciation_issues = scores_data.get("pronunciation_issues", [])
 
         db.complete_session(session_id, scores, feedback)
 
         return {
             "scores": scores,
             "feedback": feedback,
+            "grammar_corrections": grammar_corrections,
+            "pronunciation_issues": pronunciation_issues,
         }
 
     except json.JSONDecodeError:
@@ -395,6 +494,94 @@ async def complete_session(session_id: int, user=Depends(get_current_user)):
     except Exception as e:
         logger.error(f"GPT feedback error: {e}")
         raise HTTPException(500, f"Feedback generation failed: {str(e)}")
+
+
+@app.get("/api/history")
+async def get_history(user=Depends(get_current_user)):
+    sessions = db.get_all_sessions(user["user_id"])
+    return {"sessions": sessions}
+
+
+@app.get("/api/history/{session_id}")
+async def get_history_detail(session_id: int, user=Depends(get_current_user)):
+    detail = db.get_session_detail(session_id)
+    if not detail:
+        raise HTTPException(404, "Session not found")
+    if detail["user_id"] != user["user_id"]:
+        raise HTTPException(403, "Not your session")
+    return detail
+
+
+class FollowUpRequest(BaseModel):
+    question: str
+    answer: str
+    part: int = 3
+
+@app.post("/api/follow-up")
+async def generate_follow_up(body: FollowUpRequest, user=Depends(get_current_user)):
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=OPENAI_KEY)
+        prompt = (
+            f"You are an IELTS Speaking examiner conducting Part 3.\n"
+            f"The candidate was asked: \"{body.question}\"\n"
+            f"They answered: \"{body.answer}\"\n\n"
+            "Generate ONE natural follow-up question that:\n"
+            "- Digs deeper into the topic\n"
+            "- Is appropriate for IELTS Part 3 discussion\n"
+            "- Encourages the candidate to elaborate or give opinions\n\n"
+            "Return ONLY the follow-up question text, nothing else."
+        )
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an IELTS examiner. Return only the follow-up question."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=100,
+            temperature=0.7,
+        )
+        follow_up = response.choices[0].message.content.strip()
+        return {"follow_up_question": follow_up}
+    except Exception as e:
+        logger.error(f"Follow-up error: {e}")
+        raise HTTPException(500, "Failed to generate follow-up question")
+
+
+class SampleAnswerRequest(BaseModel):
+    question: str
+    part: int = 1
+
+@app.post("/api/sample-answer")
+async def generate_sample_answer(body: SampleAnswerRequest, user=Depends(get_current_user)):
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=OPENAI_KEY)
+        prompt = (
+            f"You are an IELTS Speaking expert. Generate a Band 7+ sample answer for this IELTS Part {body.part} question:\n\n"
+            f"Question: {body.question}\n\n"
+            "Requirements:\n"
+            "- Use natural, fluent English\n"
+            "- Include advanced vocabulary and collocations\n"
+            "- Use a range of grammatical structures\n"
+            "- Keep it concise but well-developed\n"
+            f"- {'2-3 sentences' if body.part == 1 else '1-2 minutes of speech' if body.part == 2 else '3-5 sentences'}\n\n"
+            "Return ONLY the sample answer text, no labels or headers."
+        )
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an IELTS Speaking expert. Provide only the sample answer."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=400,
+            temperature=0.7,
+        )
+        sample = response.choices[0].message.content.strip()
+        return {"sample_answer": sample}
+    except Exception as e:
+        logger.error(f"Sample answer error: {e}")
+        raise HTTPException(500, "Failed to generate sample answer")
 
 
 @app.get("/api/progress/weekly")
@@ -412,10 +599,14 @@ async def study_streak(user=Depends(get_current_user)):
     streak = db.get_study_streak(user["user_id"])
     total_sessions = db.get_total_sessions(user["user_id"])
     total_hours = db.get_total_practice_hours(user["user_id"])
+    avg_score = db.get_average_score(user["user_id"])
+    settings = db.get_user_settings(user["user_id"])
     return {
         "streak": streak,
         "total_sessions": total_sessions,
         "total_hours": total_hours,
+        "average_score": avg_score,
+        "target_score": settings.get("target_score", 6.5),
     }
 
 

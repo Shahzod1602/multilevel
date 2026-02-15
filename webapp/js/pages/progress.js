@@ -62,6 +62,28 @@ const ProgressPage = {
                     </div>
                 </div>
 
+                ${streak.average_score != null ? `
+                <div class="target-card">
+                    <div class="target-header">
+                        <span>Band Score Progress</span>
+                    </div>
+                    <div class="target-scores">
+                        <div class="target-actual">
+                            <div class="target-score-value">${streak.average_score.toFixed(1)}</div>
+                            <div class="target-score-label">Current Avg</div>
+                        </div>
+                        <div class="target-arrow">${streak.average_score >= streak.target_score ? '&#10003;' : '&#8594;'}</div>
+                        <div class="target-goal">
+                            <div class="target-score-value">${(streak.target_score || 6.5).toFixed(1)}</div>
+                            <div class="target-score-label">Target</div>
+                        </div>
+                    </div>
+                    <div class="target-progress-bar">
+                        <div class="target-progress-fill" style="width: ${Math.min(100, Math.round((streak.average_score / (streak.target_score || 6.5)) * 100))}%"></div>
+                    </div>
+                </div>
+                ` : ''}
+
                 <div class="chart-container">
                     <h3>Weekly Study (minutes)</h3>
                     <canvas id="progress-chart" style="width:100%;height:200px"></canvas>

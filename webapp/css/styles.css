@@ -524,6 +524,16 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
 
 .transcription-card h3 { margin-bottom: 8px; }
 
+.wpm-stats {
+    font-size: 12px;
+    color: var(--primary);
+    font-weight: 600;
+    background: var(--primary-bg);
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 8px;
+}
+
 .transcription-card .text {
     font-size: 15px;
     line-height: 1.5;
@@ -853,7 +863,503 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
     font-family: inherit;
 }
 
+/* ─── Level Selector ──────────────────────────────────────── */
+.level-selector {
+    display: flex;
+    gap: 8px;
+}
+
+.level-btn {
+    flex: 1;
+    padding: 10px 8px;
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    border: 2px solid transparent;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition);
+    font-family: inherit;
+}
+
+.level-btn.active {
+    border-color: var(--primary);
+    background: var(--primary-bg);
+    color: var(--primary);
+}
+
+/* ─── Mood Selector ──────────────────────────────────────── */
+.mood-selector {
+    display: flex;
+    gap: 8px;
+}
+
+.mood-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 12px 8px;
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all var(--transition);
+    font-family: inherit;
+}
+
+.mood-btn.active {
+    border-color: var(--primary);
+    background: var(--primary-bg);
+}
+
+.mood-emoji {
+    font-size: 28px;
+    line-height: 1;
+}
+
+.mood-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.mood-btn.active .mood-label {
+    color: var(--primary);
+}
+
 /* ─── Dark Mode Feature Card Icons ────────────────────────── */
 .dark .feature-card .icon {
     background: var(--primary-bg) !important;
+}
+
+/* ─── Cue Card (Part 2) ─────────────────────────────────────── */
+.cue-card {
+    background: linear-gradient(135deg, #FFF8E1, #FFECB3);
+    border-radius: var(--radius);
+    padding: 24px;
+    box-shadow: var(--shadow);
+    margin-bottom: 16px;
+    text-align: center;
+    border: 2px solid #FFD54F;
+}
+
+.dark .cue-card {
+    background: linear-gradient(135deg, #3D351A, #4A3F1A);
+    border-color: #FFD54F;
+}
+
+.cue-card .question-text {
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.cue-bullets {
+    text-align: left;
+    padding: 12px 16px;
+    background: rgba(255,255,255,0.5);
+    border-radius: var(--radius-sm);
+}
+
+.dark .cue-bullets {
+    background: rgba(0,0,0,0.2);
+}
+
+.cue-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.cue-bullets ul {
+    list-style: disc;
+    padding-left: 20px;
+}
+
+.cue-bullets li {
+    font-size: 14px;
+    color: var(--text);
+    margin-bottom: 4px;
+    line-height: 1.4;
+}
+
+/* ─── Prep Timer ──────────────────────────────────────────── */
+.prep-countdown {
+    text-align: center;
+    padding: 24px;
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 16px;
+}
+
+.prep-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.prep-time {
+    font-size: 48px;
+    font-weight: 800;
+    color: var(--accent-orange);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    margin-bottom: 8px;
+}
+
+/* ─── Band Score Target ──────────────────────────────────────── */
+.target-select {
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.target-card {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: var(--shadow);
+    margin-bottom: 12px;
+}
+
+.target-header {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+}
+
+.target-scores {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    margin-bottom: 12px;
+}
+
+.target-actual .target-score-value,
+.target-goal .target-score-value {
+    font-size: 28px;
+    font-weight: 800;
+    text-align: center;
+}
+
+.target-actual .target-score-value { color: var(--primary); }
+.target-goal .target-score-value { color: var(--accent-green); }
+
+.target-score-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+.target-arrow {
+    font-size: 20px;
+    color: var(--text-secondary);
+}
+
+.target-progress-bar {
+    height: 8px;
+    background: var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.target-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary), var(--accent-green));
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+
+/* ─── Grammar Corrections ────────────────────────────────────── */
+.grammar-card {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: var(--shadow);
+    margin-bottom: 12px;
+    border-left: 4px solid var(--accent-red);
+}
+
+.grammar-card h3 { margin-bottom: 12px; }
+
+.grammar-item {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.grammar-item:last-child { border-bottom: none; }
+
+.grammar-original {
+    font-size: 14px;
+    color: var(--accent-red);
+    text-decoration: line-through;
+}
+
+.grammar-arrow {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.grammar-corrected {
+    font-size: 14px;
+    color: var(--accent-green);
+    font-weight: 600;
+}
+
+.grammar-explanation {
+    grid-column: 1 / -1;
+    font-size: 12px;
+    color: var(--text-secondary);
+    padding-top: 2px;
+}
+
+/* ─── Pronunciation Tips ─────────────────────────────────────── */
+.pronunciation-card {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: var(--shadow);
+    margin-bottom: 12px;
+    border-left: 4px solid var(--accent-blue);
+}
+
+.pronunciation-card h3 { margin-bottom: 12px; }
+
+.pron-item {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.pron-item:last-child { border-bottom: none; }
+
+.pron-word {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent-blue);
+    min-width: 80px;
+}
+
+.pron-tip {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+/* ─── Sample Answer ──────────────────────────────────────────── */
+.btn-sample {
+    background: var(--accent-green);
+    color: white;
+}
+
+.sample-card {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: var(--shadow);
+    margin-bottom: 12px;
+    border: 2px solid var(--accent-green);
+}
+
+.sample-card h3 {
+    color: var(--accent-green);
+    margin-bottom: 8px;
+}
+
+.sample-card .text {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+}
+
+/* ─── Topic Filter ───────────────────────────────────────────── */
+.topic-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.topic-chip {
+    padding: 8px 14px;
+    border-radius: 20px;
+    background: var(--bg);
+    border: 2px solid var(--border);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.topic-chip.active {
+    border-color: var(--primary);
+    background: var(--primary-bg);
+    color: var(--primary);
+    font-weight: 600;
+}
+
+/* ─── History Page ───────────────────────────────────────────── */
+.history-list {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+}
+
+.history-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background var(--transition);
+}
+
+.history-item:last-child { border-bottom: none; }
+.history-item:active { background: var(--bg); }
+
+.history-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.history-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.history-icon.practice {
+    background: var(--primary-bg);
+    color: var(--primary);
+}
+
+.history-icon.mock {
+    background: #FEF3C7;
+    color: #F59E0B;
+}
+
+.dark .history-icon.mock {
+    background: #3D351A;
+}
+
+.history-title {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.history-score {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--primary);
+}
+
+.history-responses {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.history-response {
+    background: var(--bg-card);
+    border-radius: var(--radius-sm);
+    padding: 14px;
+    box-shadow: var(--shadow);
+}
+
+.history-q {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--primary);
+    margin-bottom: 6px;
+}
+
+.history-a {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+/* ─── Follow-up Card ─────────────────────────────────────────── */
+.followup-card {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: var(--shadow);
+    border-left: 4px solid var(--primary);
+}
+
+.followup-card h3 {
+    font-size: 13px;
+    color: var(--primary);
+    margin-bottom: 8px;
+}
+
+.followup-card .question-text {
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+/* ─── Daily Limit & Premium ──────────────────────────────────── */
+.daily-limit-badge {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    background: var(--primary-bg);
+    color: var(--primary);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.upgrade-prompt {
+    text-align: center;
+    padding: 32px 20px;
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+}
+
+.upgrade-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+}
+
+.upgrade-prompt h3 {
+    font-size: 20px;
+    margin-bottom: 8px;
+}
+
+.upgrade-prompt p {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.5;
 }

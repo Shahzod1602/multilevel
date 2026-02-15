@@ -62,6 +62,17 @@ const ProfilePage = {
                     </div>
                     <span class="text-secondary">${settings.daily_goal || 30} min</span>
                 </div>
+                <div class="settings-item" id="target-score-item">
+                    <div class="left">
+                        <div class="icon-circle" style="background:#DBEAFE;color:#2B77E7">&#127942;</div>
+                        <div class="label">Band Target</div>
+                    </div>
+                    <select class="target-select" id="target-select">
+                        ${[5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0].map(v =>
+                            `<option value="${v}" ${(settings.target_score || 6.5) == v ? 'selected' : ''}>${v.toFixed(1)}</option>`
+                        ).join('')}
+                    </select>
+                </div>
             </div>
 
             <button class="btn btn-outline mt-20" id="sign-out-btn">Sign Out</button>
@@ -89,6 +100,17 @@ const ProfilePage = {
                 if (App.userData) App.userData.settings.notifications = isActive ? 1 : 0;
             } catch (e) {
                 console.error('Failed to save notifications:', e);
+            }
+        });
+
+        // Target score selector
+        document.getElementById('target-select').addEventListener('change', async (e) => {
+            const val = parseFloat(e.target.value);
+            try {
+                await API.put('/api/user/settings', { target_score: val });
+                if (App.userData) App.userData.settings.target_score = val;
+            } catch (err) {
+                console.error('Failed to save target score:', err);
             }
         });
 

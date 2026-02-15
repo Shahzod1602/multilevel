@@ -2,14 +2,25 @@
  * Home page — greeting, practice cards, prepare & learn grid.
  */
 const HomePage = {
-    render(container) {
+    async render(container) {
         const user = App.userData;
         const firstName = user?.user?.first_name || 'Student';
+
+        // Fetch session info for daily limit
+        let sessionInfo = null;
+        try {
+            sessionInfo = await API.get('/api/session-info');
+        } catch (e) {}
+
+        const limitHtml = sessionInfo && !sessionInfo.is_premium
+            ? `<div class="daily-limit-badge">${sessionInfo.remaining}/${sessionInfo.daily_limit} sessions left today</div>`
+            : '';
 
         container.innerHTML = `
             <div class="greeting">
                 <h1>Hi, ${this.escapeHtml(firstName)}</h1>
                 <p>Ready to practice your speaking?</p>
+                ${limitHtml}
             </div>
 
             <div class="section-title">Practice Speaking</div>
@@ -52,6 +63,11 @@ const HomePage = {
                     <div class="icon" style="background:#DBEAFE;font-size:20px">&#127942;</div>
                     <h3>Scoring Guide</h3>
                     <p>Band descriptors</p>
+                </div>
+                <div class="feature-card" data-action="history">
+                    <div class="icon" style="background:#E8DAEF;font-size:20px">&#128218;</div>
+                    <h3>History</h3>
+                    <p>Past sessions</p>
                 </div>
             </div>
         `;

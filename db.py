@@ -107,8 +107,15 @@ def migrate():
         notifications INTEGER DEFAULT 1,
         language TEXT DEFAULT 'en',
         daily_goal INTEGER DEFAULT 30,
+        target_score REAL DEFAULT 6.5,
         FOREIGN KEY (user_id) REFERENCES users (user_id)
     )''')
+
+    # Add target_score column if not exists
+    try:
+        c.execute("ALTER TABLE user_settings ADD COLUMN target_score REAL DEFAULT 6.5")
+    except sqlite3.OperationalError:
+        pass
 
     # Indexes
     c.execute("CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at)")
@@ -179,7 +186,7 @@ def get_user_settings(user_id):
 
 
 def update_user_settings(user_id, **kwargs):
-    allowed = {"dark_mode", "notifications", "language", "daily_goal"}
+    allowed = {"dark_mode", "notifications", "language", "daily_goal", "target_score"}
     fields = {k: v for k, v in kwargs.items() if k in allowed}
     if not fields:
         return
@@ -348,6 +355,36 @@ def get_recent_sessions(user_id, limit=10):
     return [dict(r) for r in rows]
 
 
+def get_all_sessions(user_id, limit=50):
+    """Get all completed sessions for history."""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute(
+        "SELECT * FROM sessions WHERE user_id=? AND status='completed' ORDER BY completed_at DESC LIMIT ?",
+        (user_id, limit)
+    )
+    rows = c.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_session_detail(session_id):
+    """Get session with all responses."""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM sessions WHERE id = ?", (session_id,))
+    session = c.fetchone()
+    if not session:
+        conn.close()
+        return None
+    c.execute("SELECT * FROM responses WHERE session_id = ? ORDER BY id", (session_id,))
+    responses = c.fetchall()
+    conn.close()
+    result = dict(session)
+    result["responses"] = [dict(r) for r in responses]
+    return result
+
+
 def get_total_sessions(user_id):
     conn = get_connection()
     c = conn.cursor()
@@ -355,6 +392,33 @@ def get_total_sessions(user_id):
     row = c.fetchone()
     conn.close()
     return row["cnt"] if row else 0
+
+
+def get_daily_sessions_count(user_id):
+    """Get number of sessions started today."""
+    conn = get_connection()
+    c = conn.cursor()
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    c.execute(
+        "SELECT sessions_count FROM daily_study WHERE user_id=? AND date=?",
+        (user_id, today)
+    )
+    row = c.fetchone()
+    conn.close()
+    return row["sessions_count"] if row else 0
+
+
+def get_average_score(user_id, limit=10):
+    """Get average overall score from recent completed sessions."""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute(
+        "SELECT AVG(score_overall) as avg_score FROM (SELECT score_overall FROM sessions WHERE user_id=? AND status='completed' AND score_overall IS NOT NULL ORDER BY completed_at DESC LIMIT ?)",
+        (user_id, limit)
+    )
+    row = c.fetchone()
+    conn.close()
+    return round(row["avg_score"], 1) if row and row["avg_score"] else None
 
 
 def get_total_practice_hours(user_id):

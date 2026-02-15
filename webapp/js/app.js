@@ -84,6 +84,9 @@ const App = {
             case 'pronunciation':
                 PronunciationPage.render(this.container);
                 break;
+            case 'history':
+                HistoryPage.render(this.container, params);
+                break;
             default:
                 HomePage.render(this.container);
         }
