@@ -336,9 +336,9 @@ async def complete_session(session_id: int, user=Depends(get_current_user)):
         )
 
     try:
-        import openai
-        openai.api_key = OPENAI_KEY
-        response = openai.ChatCompletion.create(
+        from openai import OpenAI
+        client = OpenAI(api_key=OPENAI_KEY)
+        response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are a certified IELTS Speaking examiner. Return only valid JSON."},
@@ -347,7 +347,7 @@ async def complete_session(session_id: int, user=Depends(get_current_user)):
             max_tokens=500,
             temperature=0.5,
         )
-        content = response.choices[0].message["content"].strip()
+        content = response.choices[0].message.content.strip()
 
         # Try to parse JSON from response
         if content.startswith("```"):
