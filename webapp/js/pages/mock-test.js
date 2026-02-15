@@ -277,11 +277,7 @@ const MockTestPage = {
             this.clearAutoAdvance();
             if (this.prepTimer) { clearInterval(this.prepTimer); this.prepTimer = null; }
             if (Recorder.isRecording()) Recorder.stop();
-            if (this.responses.length > 0) {
-                this.showResults(container);
-            } else {
-                App.navigate('home');
-            }
+            App.navigate('home');
         });
 
         this.setupRecordBtn(container);
@@ -381,11 +377,7 @@ const MockTestPage = {
 
         container.querySelector('#back-btn').addEventListener('click', () => App.navigate('home'));
         container.querySelector('#finish-btn').addEventListener('click', () => {
-            if (this.responses.length > 0) {
-                this.showResults(container);
-            } else {
-                App.navigate('home');
-            }
+            App.navigate('home');
         });
         container.querySelector('#continue-btn').addEventListener('click', () => {
             this.renderQuestion(container);
