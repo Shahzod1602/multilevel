@@ -9,4 +9,3 @@ fastapi
 uvicorn[standard]
 python-multipart
 edge-tts
-psycopg2-binary

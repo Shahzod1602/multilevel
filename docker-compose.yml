@@ -10,7 +10,6 @@ services:
       - "8080:8080"
     networks:
       - web
-      - ipv6out
 
   nginx:
     image: nginx:alpine
@@ -40,9 +39,3 @@ services:
 networks:
   web:
     driver: bridge
-  ipv6out:
-    driver: bridge
-    enable_ipv6: true
-    ipam:
-      config:
-        - subnet: "fd00:dead:beef::/48"

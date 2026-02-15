@@ -7,7 +7,7 @@ import asyncio
 import sys
 import logging
 import random
-from db import get_connection
+import sqlite3
 import tempfile
 import subprocess
 from datetime import datetime, timedelta
@@ -51,12 +51,43 @@ openai_client = OpenAI(api_key=OPENAI_KEY)
 GROQ_KEY = os.getenv("GROQ_API_KEY", "")
 groq_client = Groq(api_key=GROQ_KEY)
 
+# Database configuration
+DB_NAME = "bot.db"
+
 # Initialize database
 def init_db():
-    from db import migrate
-    migrate()
-    conn = get_connection()
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS users (
+                    user_id INTEGER PRIMARY KEY,
+                    contact TEXT,
+                    tariff TEXT DEFAULT 'free',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                 )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS admins (
+                    user_id INTEGER PRIMARY KEY
+                 )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS attempts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    attempt_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users (user_id)
+                 )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS ads (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    admin_id INTEGER,
+                    image_path TEXT,
+                    caption TEXT,
+                    schedule_time TIMESTAMP,
+                    sent INTEGER DEFAULT 0,
+                    FOREIGN KEY (admin_id) REFERENCES admins (user_id)
+                 )''')
+    c.execute("INSERT OR IGNORE INTO admins (user_id) VALUES (?)", (5471121432,))
+
+    # Add indexes for faster stats queries
+    c.execute("CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at)")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_attempts_attempt_time ON attempts(attempt_time)")
+
     try:
         with open('questions.json', 'r', encoding='utf-8') as f:
             data = json.load(f)
@@ -66,12 +97,12 @@ def init_db():
                     contact = user.get('contact')
                     tariff = user.get('tariff', 'free')
                     if user_id and contact:
-                        c.execute(
-                            "INSERT INTO users (user_id, contact, tariff) VALUES (%s, %s, %s) ON CONFLICT (user_id) DO UPDATE SET contact = EXCLUDED.contact, tariff = EXCLUDED.tariff",
-                            (user_id, contact, tariff))
+                        c.execute("INSERT OR REPLACE INTO users (user_id, contact, tariff) VALUES (?, ?, ?)",
+                                  (user_id, contact, tariff))
                         logging.info(f"Saved user {user_id} from questions.json")
     except Exception as e:
         logging.error(f"Error loading users from questions.json: {str(e)}")
+
     conn.commit()
     conn.close()
 
@@ -150,19 +181,19 @@ def text_to_speech(text):
 
 # Get user tariff
 def get_user_tariff(user_id):
-    conn = get_connection()
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("SELECT tariff FROM users WHERE user_id = %s", (user_id,))
+    c.execute("SELECT tariff FROM users WHERE user_id = ?", (user_id,))
     result = c.fetchone()
     conn.close()
     return result[0] if result else 'free'
 
 # Count user attempts
 def count_attempts(user_id):
-    conn = get_connection()
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     one_day_ago = datetime.utcnow() - timedelta(hours=24)
-    c.execute("SELECT COUNT(*) FROM attempts WHERE user_id = %s AND attempt_time > %s",
+    c.execute("SELECT COUNT(*) FROM attempts WHERE user_id = ? AND attempt_time > ?",
               (user_id, one_day_ago))
     count = c.fetchone()[0]
     conn.close()
@@ -170,17 +201,17 @@ def count_attempts(user_id):
 
 # Add an attempt
 def add_attempt(user_id):
-    conn = get_connection()
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("INSERT INTO attempts (user_id) VALUES (%s)", (user_id,))
+    c.execute("INSERT INTO attempts (user_id) VALUES (?)", (user_id,))
     conn.commit()
     conn.close()
 
 # Check if user is admin
 def is_admin(user_id):
-    conn = get_connection()
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("SELECT 1 FROM admins WHERE user_id = %s", (user_id,))
+    c.execute("SELECT 1 FROM admins WHERE user_id = ?", (user_id,))
     result = c.fetchone()
     conn.close()
     return bool(result)
@@ -203,9 +234,9 @@ async def save_response_to_file(user_id, response_data):
 # Start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
-    conn = get_connection()
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("SELECT contact FROM users WHERE user_id = %s", (user_id,))
+    c.execute("SELECT contact FROM users WHERE user_id = ?", (user_id,))
     user = c.fetchone()
     conn.close()
 
@@ -227,9 +258,9 @@ async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
     contact = update.message.contact
     phone_number = contact.phone_number
 
-    conn = get_connection()
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("INSERT INTO users (user_id, contact, tariff) VALUES (%s, %s, %s) ON CONFLICT (user_id) DO UPDATE SET contact = EXCLUDED.contact, tariff = EXCLUDED.tariff",
+    c.execute("INSERT OR REPLACE INTO users (user_id, contact, tariff) VALUES (?, ?, ?)",
               (user_id, phone_number, 'free'))
     conn.commit()
     conn.close()
@@ -299,9 +330,9 @@ async def timeout_exam(user_id, context: ContextTypes.DEFAULT_TYPE):
 # Start exam
 async def start_exam(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
-    conn = get_connection()
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("SELECT contact FROM users WHERE user_id = %s", (user_id,))
+    c.execute("SELECT contact FROM users WHERE user_id = ?", (user_id,))
     user = c.fetchone()
     conn.close()
 
@@ -876,9 +907,9 @@ async def admin_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     new_admin_id = int(args[0])
-    conn = get_connection()
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("INSERT INTO admins (user_id) VALUES (%s) ON CONFLICT DO NOTHING", (new_admin_id,))
+    c.execute("INSERT OR IGNORE INTO admins (user_id) VALUES (?)", (new_admin_id,))
     conn.commit()
     conn.close()
 
@@ -896,7 +927,7 @@ async def send_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Usage: /send_all <message>")
         return
 
-    conn = get_connection()
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute("SELECT user_id FROM users")
     users = c.fetchall()
@@ -929,14 +960,14 @@ async def upgrade_gold(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     target = args[0]
-    conn = get_connection()
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
 
     if target.startswith("@"):
         username = target[1:]
-        c.execute("SELECT user_id, first_name, tariff FROM users WHERE username = %s", (username,))
+        c.execute("SELECT user_id, first_name, tariff FROM users WHERE username = ?", (username,))
     elif target.isdigit():
-        c.execute("SELECT user_id, first_name, tariff FROM users WHERE user_id = %s", (int(target),))
+        c.execute("SELECT user_id, first_name, tariff FROM users WHERE user_id = ?", (int(target),))
     else:
         await update.message.reply_text("❌ Provide user_id (number) or @username")
         conn.close()
@@ -952,7 +983,7 @@ async def upgrade_gold(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = row[1] or target
     old_tariff = row[2] or 'free'
 
-    c.execute("UPDATE users SET tariff = 'gold' WHERE user_id = %s", (target_user_id,))
+    c.execute("UPDATE users SET tariff = 'gold' WHERE user_id = ?", (target_user_id,))
     conn.commit()
     conn.close()
 
@@ -977,14 +1008,14 @@ async def downgrade_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     target = args[0]
-    conn = get_connection()
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
 
     if target.startswith("@"):
         username = target[1:]
-        c.execute("SELECT user_id, first_name FROM users WHERE username = %s", (username,))
+        c.execute("SELECT user_id, first_name FROM users WHERE username = ?", (username,))
     elif target.isdigit():
-        c.execute("SELECT user_id, first_name FROM users WHERE user_id = %s", (int(target),))
+        c.execute("SELECT user_id, first_name FROM users WHERE user_id = ?", (int(target),))
     else:
         await update.message.reply_text("❌ Provide user_id or @username")
         conn.close()
@@ -999,7 +1030,7 @@ async def downgrade_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target_user_id = row[0]
     name = row[1] or target
 
-    c.execute("UPDATE users SET tariff = 'free' WHERE user_id = %s", (target_user_id,))
+    c.execute("UPDATE users SET tariff = 'free' WHERE user_id = ?", (target_user_id,))
     conn.commit()
     conn.close()
 
@@ -1033,9 +1064,9 @@ async def upload_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 with open(file_path, "wb") as f:
                     f.write(await resp.read())
 
-    conn = get_connection()
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("INSERT INTO ads (admin_id, image_path, caption, schedule_time) VALUES (%s, %s, %s, %s)",
+    c.execute("INSERT INTO ads (admin_id, image_path, caption, schedule_time) VALUES (?, ?, ?, ?)",
               (user_id, file_path, caption, datetime.utcnow() + timedelta(hours=1)))
     conn.commit()
     conn.close()
@@ -1044,9 +1075,9 @@ async def upload_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.info(f"Admin {user_id} uploaded ad: {file_path}")
 
 async def send_ad(context: ContextTypes.DEFAULT_TYPE):
-    conn = get_connection()
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("SELECT id, image_path, caption FROM ads WHERE sent = 0 AND schedule_time <= %s",
+    c.execute("SELECT id, image_path, caption FROM ads WHERE sent = 0 AND schedule_time <= ?",
               (datetime.utcnow(),))
     ads = c.fetchall()
 
@@ -1069,7 +1100,7 @@ async def send_ad(context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logging.error(f"Failed to send ad {ad_id} to {user_id}: {str(e)}")
 
-        c.execute("UPDATE ads SET sent = 1 WHERE id = %s", (ad_id,))
+        c.execute("UPDATE ads SET sent = 1 WHERE id = ?", (ad_id,))
         conn.commit()
 
     conn.close()
@@ -1081,7 +1112,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Not authorized.")
         return
 
-    conn = get_connection()
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
 
     # Total users
@@ -1089,11 +1120,11 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total_users = c.fetchone()[0]
 
     # New users today
-    c.execute("SELECT COUNT(*) FROM users WHERE created_at::date = CURRENT_DATE")
+    c.execute("SELECT COUNT(*) FROM users WHERE DATE(created_at) = DATE('now')")
     new_users_today = c.fetchone()[0]
 
     # Users who used today (distinct attempts today)
-    c.execute("SELECT COUNT(DISTINCT user_id) FROM attempts WHERE attempt_time::date = CURRENT_DATE")
+    c.execute("SELECT COUNT(DISTINCT user_id) FROM attempts WHERE DATE(attempt_time) = DATE('now')")
     users_used_today = c.fetchone()[0]
 
     conn.close()
