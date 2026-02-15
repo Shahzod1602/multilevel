@@ -13,7 +13,6 @@ import subprocess
 from datetime import datetime, timedelta
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InputFile, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
-import openai
 from gtts import gTTS
 from groq import Groq
 import re
@@ -47,7 +46,8 @@ if not TELEGRAM_TOKEN or not OPENAI_KEY:
     logging.error("Missing TELEGRAM_BOT_TOKEN or OPENAI_API_KEY")
     raise ValueError("❌ Missing TELEGRAM_BOT_TOKEN or OPENAI_API_KEY")
 
-openai.api_key = OPENAI_KEY
+from openai import OpenAI
+openai_client = OpenAI(api_key=OPENAI_KEY)
 GROQ_KEY = os.getenv("GROQ_API_KEY", "")
 groq_client = Groq(api_key=GROQ_KEY)
 
@@ -503,7 +503,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             with open(wav_path, "rb") as audio_file:
                 result = groq_client.audio.transcriptions.create(
                     file=(wav_path, audio_file.read()),
-                    model="distil-whisper-large-v3-en",
+                    model="whisper-large-v3-turbo",
                     language="en",
                     prompt=initial_prompt,
                 )
@@ -730,7 +730,7 @@ async def provide_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     try:
-        response = openai.ChatCompletion.create(
+        response = openai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are a certified IELTS Speaking examiner."},
@@ -739,7 +739,7 @@ async def provide_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             max_tokens=500,
             temperature=0.5
         )
-        feedback = response.choices[0].message['content']
+        feedback = response.choices[0].message.content
         adjusted_feedback = adjust_feedback_scores(feedback, user_id)
 
         final_feedback = "📊 **Exam Feedback:**\n" + adjusted_feedback
@@ -862,7 +862,7 @@ async def provide_feedback_for_timeout(user_id, context: ContextTypes.DEFAULT_TY
         )
 
     try:
-        response = openai.ChatCompletion.create(
+        response = openai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are a certified IELTS Speaking examiner."},
@@ -871,7 +871,7 @@ async def provide_feedback_for_timeout(user_id, context: ContextTypes.DEFAULT_TY
             max_tokens=500,
             temperature=0.5
         )
-        feedback = response.choices[0].message['content']
+        feedback = response.choices[0].message.content
         adjusted_feedback = adjust_feedback_scores(feedback, user_id)
         final_feedback = "📊 **Exam Feedback (Incomplete due to Timeout):**\n" + adjusted_feedback
         await context.bot.send_message(chat_id=user_id, text=final_feedback, parse_mode="Markdown")
