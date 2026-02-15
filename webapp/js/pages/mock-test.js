@@ -8,6 +8,7 @@ const MockTestPage = {
     currentIndex: 0,
     responses: [],
     state: 'idle',
+    showTranscription: true,
     recordingStartTime: null,
     autoAdvanceTimer: null,
 
@@ -16,6 +17,7 @@ const MockTestPage = {
         this.currentIndex = 0;
         this.responses = [];
         this.state = 'idle';
+        this.showTranscription = true;
         this.recordingStartTime = null;
         this.clearAutoAdvance();
 
@@ -70,11 +72,23 @@ const MockTestPage = {
                 </p>
             </div>
 
-            <button class="btn btn-primary mt-16" id="start-btn">Start Test</button>
+            <div class="card mt-12">
+                <h3>Transcription Mode</h3>
+                <p class="text-secondary text-sm mt-8">Choose whether to see your speech transcribed after each answer.</p>
+                <div class="transcription-toggle mt-12">
+                    <button class="btn btn-primary" id="mode-with">With Transcription</button>
+                    <button class="btn btn-outline mt-8" id="mode-without">Without Transcription</button>
+                </div>
+            </div>
         `;
 
         container.querySelector('#back-btn').addEventListener('click', () => App.navigate('home'));
-        container.querySelector('#start-btn').addEventListener('click', () => {
+        container.querySelector('#mode-with').addEventListener('click', () => {
+            this.showTranscription = true;
+            this.renderQuestion(container);
+        });
+        container.querySelector('#mode-without').addEventListener('click', () => {
+            this.showTranscription = false;
             this.renderQuestion(container);
         });
     },
@@ -100,6 +114,7 @@ const MockTestPage = {
             <div class="page-header">
                 <button class="back-btn" id="back-btn">&#8592;</button>
                 <h2>Part ${this.currentPart}</h2>
+                <button class="finish-test-btn" id="finish-btn">Finish</button>
             </div>
 
             <div class="question-card">
@@ -118,7 +133,6 @@ const MockTestPage = {
                 <p class="text-sm text-secondary mt-8" id="record-hint">Tap to start recording</p>
             </div>
 
-            <div id="choice-area"></div>
             <div id="transcription-area"></div>
             <div id="action-area"></div>
         `;
@@ -127,6 +141,16 @@ const MockTestPage = {
             this.clearAutoAdvance();
             if (Recorder.isRecording()) Recorder.stop();
             App.navigate('home');
+        });
+
+        container.querySelector('#finish-btn').addEventListener('click', () => {
+            this.clearAutoAdvance();
+            if (Recorder.isRecording()) Recorder.stop();
+            if (this.responses.length > 0) {
+                this.showResults(container);
+            } else {
+                App.navigate('home');
+            }
         });
 
         this.setupRecordBtn(container);
@@ -143,6 +167,7 @@ const MockTestPage = {
             <div class="page-header">
                 <button class="back-btn" id="back-btn">&#8592;</button>
                 <h2>Mock Test</h2>
+                <button class="finish-test-btn" id="finish-btn">Finish</button>
             </div>
             <div class="card text-center">
                 <h3>Moving to Part ${this.currentPart}</h3>
@@ -152,6 +177,13 @@ const MockTestPage = {
         `;
 
         container.querySelector('#back-btn').addEventListener('click', () => App.navigate('home'));
+        container.querySelector('#finish-btn').addEventListener('click', () => {
+            if (this.responses.length > 0) {
+                this.showResults(container);
+            } else {
+                App.navigate('home');
+            }
+        });
         container.querySelector('#continue-btn').addEventListener('click', () => {
             this.renderQuestion(container);
         });
@@ -164,7 +196,6 @@ const MockTestPage = {
 
         btn.addEventListener('click', async () => {
             if (this.state === 'recording') {
-                // Check 5 second minimum
                 const elapsed = (Date.now() - this.recordingStartTime) / 1000;
                 if (elapsed < 5) {
                     hint.textContent = `Wait ${Math.ceil(5 - elapsed)}s more...`;
@@ -203,76 +234,55 @@ const MockTestPage = {
     },
 
     async handleRecording(blob, container) {
-        const choiceArea = container.querySelector('#choice-area');
         const transcriptionArea = container.querySelector('#transcription-area');
         const actionArea = container.querySelector('#action-area');
         const hint = container.querySelector('#record-hint');
         const btn = container.querySelector('#record-btn');
 
-        // Show transcription choice
-        choiceArea.innerHTML = `
-            <div class="transcription-choice">
-                <button class="btn btn-primary" id="with-transcription-btn">With Transcription</button>
-                <button class="btn btn-secondary mt-8" id="without-transcription-btn">Without Transcription</button>
-            </div>
-        `;
+        transcriptionArea.innerHTML = `<div class="loading"><div class="spinner"></div><span>${this.showTranscription ? 'Transcribing...' : 'Saving response...'}</span></div>`;
 
-        hint.textContent = 'Choose an option';
-        btn.classList.remove('disabled');
+        try {
+            const q = this.allQuestions[this.currentPart][this.currentIndex];
+            const formData = new FormData();
+            formData.append('audio', blob, 'recording.webm');
+            formData.append('question', q.question);
+            formData.append('part', this.currentPart);
 
-        const processWithChoice = async (showTranscription) => {
-            choiceArea.innerHTML = '';
-            transcriptionArea.innerHTML = `<div class="loading"><div class="spinner"></div><span>${showTranscription ? 'Transcribing...' : 'Saving response...'}</span></div>`;
+            const result = await API.postForm(`/api/sessions/${this.sessionId}/respond`, formData);
 
-            try {
-                const q = this.allQuestions[this.currentPart][this.currentIndex];
-                const formData = new FormData();
-                formData.append('audio', blob, 'recording.webm');
-                formData.append('question', q.question);
-                formData.append('part', this.currentPart);
+            this.responses.push({
+                part: this.currentPart,
+                question: q.question,
+                transcription: result.transcription,
+                duration: result.duration,
+            });
 
-                const result = await API.postForm(`/api/sessions/${this.sessionId}/respond`, formData);
-
-                this.responses.push({
-                    part: this.currentPart,
-                    question: q.question,
-                    transcription: result.transcription,
-                    duration: result.duration,
-                });
-
-                if (showTranscription) {
-                    transcriptionArea.innerHTML = `
-                        <div class="transcription-card">
-                            <h3>Your Response</h3>
-                            <p class="text">${result.transcription}</p>
-                        </div>
-                    `;
-                } else {
-                    transcriptionArea.innerHTML = `
-                        <div class="card text-center">
-                            <p class="text-secondary">Response saved</p>
-                        </div>
-                    `;
-                }
-
-                this.showNextWithAutoAdvance(actionArea, container);
-                this.state = 'idle';
-            } catch (err) {
+            if (this.showTranscription) {
                 transcriptionArea.innerHTML = `
-                    <div class="card"><p class="text-secondary">Failed: ${err.message}</p></div>
+                    <div class="transcription-card">
+                        <h3>Your Response</h3>
+                        <p class="text">${result.transcription}</p>
+                    </div>
                 `;
-                this.state = 'idle';
-                hint.textContent = 'Tap to try again';
+            } else {
+                transcriptionArea.innerHTML = `
+                    <div class="card text-center">
+                        <p class="text-secondary">Response saved</p>
+                    </div>
+                `;
             }
-        };
 
-        choiceArea.querySelector('#with-transcription-btn').addEventListener('click', () => {
-            processWithChoice(true);
-        });
-
-        choiceArea.querySelector('#without-transcription-btn').addEventListener('click', () => {
-            processWithChoice(false);
-        });
+            this.showNextWithAutoAdvance(actionArea, container);
+            this.state = 'idle';
+            btn.classList.remove('disabled');
+        } catch (err) {
+            transcriptionArea.innerHTML = `
+                <div class="card"><p class="text-secondary">Failed: ${err.message}</p></div>
+            `;
+            this.state = 'idle';
+            btn.classList.remove('disabled');
+            hint.textContent = 'Tap to try again';
+        }
     },
 
     showNextWithAutoAdvance(actionArea, container) {

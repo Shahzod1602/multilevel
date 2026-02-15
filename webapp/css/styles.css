@@ -742,8 +742,23 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
 .hidden { display: none !important; }
 
 /* ─── Transcription Choice ────────────────────────────────── */
-.transcription-choice {
-    margin-bottom: 12px;
+.transcription-toggle {
+    display: flex;
+    flex-direction: column;
+}
+
+/* ─── Finish Test Button ──────────────────────────────────── */
+.finish-test-btn {
+    margin-left: auto;
+    padding: 6px 14px;
+    border-radius: 8px;
+    background: var(--accent-red);
+    color: white;
+    border: none;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
 }
 
 /* ─── Dark Mode Feature Card Icons ────────────────────────── */
