@@ -12,8 +12,8 @@ const HomePage = {
             sessionInfo = await API.get('/api/session-info');
         } catch (e) {}
 
-        const limitHtml = sessionInfo && !sessionInfo.is_premium
-            ? `<div class="daily-limit-badge">${sessionInfo.remaining}/${sessionInfo.daily_limit} sessions left today</div>`
+        const limitHtml = sessionInfo
+            ? `<div class="daily-limit-badge">${sessionInfo.mock_remaining}/${sessionInfo.mock_limit} mock tests left today</div>`
             : '';
 
         container.innerHTML = `

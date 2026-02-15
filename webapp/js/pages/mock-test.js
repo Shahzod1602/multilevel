@@ -58,10 +58,11 @@ const MockTestPage = {
                 ${isLimit ? `
                     <div class="upgrade-prompt">
                         <div class="upgrade-icon">&#128274;</div>
-                        <h3>Daily Limit Reached</h3>
-                        <p>You've used all 3 free sessions today.</p>
-                        <p class="mt-8">Upgrade to <strong>Premium</strong> for unlimited practice!</p>
-                        <button class="btn btn-primary mt-12" id="home-btn">Back to Home</button>
+                        <h3>Daily Mock Limit Reached</h3>
+                        <p>You've used all your mock tests for today.</p>
+                        <p class="mt-8">Upgrade to <strong>Premium</strong> for 5 mock tests per day!</p>
+                        <button class="btn btn-primary mt-12" id="upgrade-btn">Contact Admin to Upgrade</button>
+                        <button class="btn btn-outline mt-8" id="home-btn">Back to Home</button>
                     </div>
                 ` : `
                     <div class="card text-center">
@@ -71,6 +72,11 @@ const MockTestPage = {
             `;
             container.querySelector('#back-btn').addEventListener('click', () => App.navigate('home'));
             container.querySelector('#home-btn')?.addEventListener('click', () => App.navigate('home'));
+            container.querySelector('#upgrade-btn')?.addEventListener('click', () => {
+                if (window.Telegram?.WebApp) {
+                    window.Telegram.WebApp.openTelegramLink('https://t.me/IELTSPEAK_bot');
+                }
+            });
         }
     },
 

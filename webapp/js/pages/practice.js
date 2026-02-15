@@ -107,29 +107,18 @@ const PracticePage = {
 
             this.renderQuestion(container);
         } catch (err) {
-            const isLimit = err.message.includes('Daily limit');
             container.innerHTML = `
                 <div class="page-header">
                     <button class="back-btn" id="back-btn">&#8592;</button>
-                    <h2>${isLimit ? 'Limit Reached' : 'Error'}</h2>
+                    <h2>Error</h2>
                 </div>
-                ${isLimit ? `
-                    <div class="upgrade-prompt">
-                        <div class="upgrade-icon">&#128274;</div>
-                        <h3>Daily Limit Reached</h3>
-                        <p>You've used all 3 free sessions today.</p>
-                        <p class="mt-8">Upgrade to <strong>Premium</strong> for unlimited practice!</p>
-                        <button class="btn btn-primary mt-12" id="home-btn">Back to Home</button>
-                    </div>
-                ` : `
-                    <div class="card text-center">
-                        <p class="text-secondary">${err.message}</p>
-                    </div>
-                    <button class="btn btn-primary mt-12" id="home-btn">Back to Home</button>
-                `}
+                <div class="card text-center">
+                    <p class="text-secondary">${err.message}</p>
+                </div>
+                <button class="btn btn-primary mt-12" id="home-btn">Back to Home</button>
             `;
             container.querySelector('#back-btn').addEventListener('click', () => App.navigate('home'));
-            container.querySelector('#home-btn')?.addEventListener('click', () => App.navigate('home'));
+            container.querySelector('#home-btn').addEventListener('click', () => App.navigate('home'));
         }
     },
 

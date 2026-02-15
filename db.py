@@ -408,6 +408,20 @@ def get_daily_sessions_count(user_id):
     return row["sessions_count"] if row else 0
 
 
+def get_daily_mock_count(user_id):
+    """Get number of mock sessions started today."""
+    conn = get_connection()
+    c = conn.cursor()
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    c.execute(
+        "SELECT COUNT(*) as cnt FROM sessions WHERE user_id=? AND type='mock' AND date(started_at)=?",
+        (user_id, today)
+    )
+    row = c.fetchone()
+    conn.close()
+    return row["cnt"] if row else 0
+
+
 def get_average_score(user_id, limit=10):
     """Get average overall score from recent completed sessions."""
     conn = get_connection()

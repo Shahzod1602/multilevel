@@ -217,14 +217,14 @@ async def get_questions(part: int = 1, user=Depends(get_current_user)):
 
 @app.get("/api/session-info")
 async def session_info(user=Depends(get_current_user)):
-    today_count = db.get_daily_sessions_count(user["user_id"])
     tariff = user.get("tariff", "free")
     is_premium = tariff != "free"
-    remaining = None if is_premium else max(0, FREE_DAILY_LIMIT - today_count)
+    mock_count = db.get_daily_mock_count(user["user_id"])
+    mock_limit = MOCK_LIMIT_PREMIUM if is_premium else MOCK_LIMIT_FREE
     return {
-        "today_count": today_count,
-        "daily_limit": FREE_DAILY_LIMIT,
-        "remaining": remaining,
+        "mock_today": mock_count,
+        "mock_limit": mock_limit,
+        "mock_remaining": max(0, mock_limit - mock_count),
         "is_premium": is_premium,
         "tariff": tariff,
     }
@@ -237,18 +237,21 @@ async def get_topics(part: int = 1, user=Depends(get_current_user)):
     return {"topics": topics, "total": len(topics)}
 
 
-FREE_DAILY_LIMIT = 3
+MOCK_LIMIT_FREE = 2
+MOCK_LIMIT_PREMIUM = 5
 
 @app.post("/api/sessions/start")
 async def start_session(body: SessionStart, user=Depends(get_current_user)):
-    # Check daily limit for free users
-    if user.get("tariff", "free") == "free":
-        today_count = db.get_daily_sessions_count(user["user_id"])
-        if today_count >= FREE_DAILY_LIMIT:
-            raise HTTPException(
-                403,
-                f"Daily limit reached ({FREE_DAILY_LIMIT} sessions). Upgrade to Premium for unlimited practice!"
-            )
+    # Check daily mock limit
+    if body.type == "mock":
+        mock_count = db.get_daily_mock_count(user["user_id"])
+        is_premium = user.get("tariff", "free") != "free"
+        limit = MOCK_LIMIT_PREMIUM if is_premium else MOCK_LIMIT_FREE
+        if mock_count >= limit:
+            if is_premium:
+                raise HTTPException(403, f"Daily mock limit reached ({MOCK_LIMIT_PREMIUM}/day).")
+            else:
+                raise HTTPException(403, f"Daily mock limit reached ({MOCK_LIMIT_FREE}/day). Upgrade to Premium for {MOCK_LIMIT_PREMIUM} mocks per day!")
 
     session_id = db.create_session(user["user_id"], body.type, body.part)
 
