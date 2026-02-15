@@ -25,10 +25,9 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="IELTS Speaking Mini App")
 
-# Will be set from run.py
-whisper_model = None
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 OPENAI_KEY = os.getenv("OPENAI_API_KEY", "")
+GROQ_KEY = os.getenv("GROQ_API_KEY", "")
 
 # Load questions
 QUESTIONS = []
@@ -249,41 +248,29 @@ async def session_respond(
     with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
         tmp.write(audio_data)
         tmp.flush()
-        webm_path = tmp.name
-
-    wav_path = webm_path.replace(".webm", ".wav")
+        audio_path = tmp.name
 
     try:
-        # Convert to wav
-        result = subprocess.run(
-            ["ffmpeg", "-y", "-i", webm_path, "-af", "afftdn=nf=-25", wav_path],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-        )
-        if result.returncode != 0:
-            raise Exception(f"FFmpeg error: {result.stderr}")
+        # Transcribe with Groq Whisper API
+        from groq import Groq
+        groq_client = Groq(api_key=GROQ_KEY)
 
-        # Transcribe with Whisper (in executor to avoid blocking)
-        if whisper_model is None:
-            raise HTTPException(500, "Whisper model not loaded")
-
-        loop = asyncio.get_event_loop()
-        transcription_result = await loop.run_in_executor(
-            None,
-            lambda: whisper_model.transcribe(
-                wav_path, language="en", fp16=False,
-                initial_prompt=f"Response to IELTS Part {part} question: {question}",
-                temperature=0
+        with open(audio_path, "rb") as audio_file:
+            transcription_result = groq_client.audio.transcriptions.create(
+                file=(audio_path, audio_file.read()),
+                model="distil-whisper-large-v3-en",
+                language="en",
+                prompt=f"IELTS Speaking Part {part} response to: {question}",
             )
-        )
-        transcription = transcription_result["text"].strip()
+        transcription = transcription_result.text.strip()
 
         if not transcription:
             raise HTTPException(400, "Could not transcribe audio")
 
-        # Get audio duration
+        # Get audio duration via ffprobe
         duration_result = subprocess.run(
             ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-             "-of", "default=noprint_wrappers=1:nokey=1", wav_path],
+             "-of", "default=noprint_wrappers=1:nokey=1", audio_path],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
         )
         duration = int(float(duration_result.stdout.strip())) if duration_result.stdout.strip() else 0
@@ -296,11 +283,10 @@ async def session_respond(
         }
 
     finally:
-        for p in [webm_path, wav_path]:
-            try:
-                os.remove(p)
-            except OSError:
-                pass
+        try:
+            os.remove(audio_path)
+        except OSError:
+            pass
 
 
 @app.post("/api/sessions/{session_id}/complete")

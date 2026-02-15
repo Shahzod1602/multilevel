@@ -1,6 +1,5 @@
 """
 Run both the Telegram bot and FastAPI web server together.
-Whisper model is loaded once and shared between them.
 """
 import os
 import sys
@@ -33,15 +32,6 @@ def run_web_server():
 
     # Run migrations
     db.migrate()
-
-    # Share whisper model
-    try:
-        import whisper
-        logger.info("Loading Whisper model...")
-        web_server.whisper_model = whisper.load_model("small").to("cpu")
-        logger.info("Whisper model loaded for web server")
-    except Exception as e:
-        logger.error(f"Failed to load Whisper model for web server: {e}")
 
     port = int(os.getenv("WEB_PORT", "8080"))
     logger.info(f"Starting web server on port {port}...")
