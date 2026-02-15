@@ -44,40 +44,51 @@ except FileNotFoundError:
 
 def validate_init_data(init_data: str) -> dict:
     """Validate Telegram Mini App initData using HMAC-SHA256."""
-    # Strip any whitespace
     init_data = init_data.strip()
 
-    # Manual split + unquote (not parse_qs which converts + to space)
-    data_dict = {}
+    # Parse into raw (URL-encoded) and decoded key-value pairs
+    raw_dict = {}
+    decoded_dict = {}
     for pair in init_data.split("&"):
         if "=" not in pair:
             continue
         key, value = pair.split("=", 1)
-        data_dict[key] = unquote(value)
+        raw_dict[key] = value
+        decoded_dict[key] = unquote(value)
 
-    logger.info(f"Auth keys: {sorted(data_dict.keys())}")
+    logger.info(f"Auth keys: {sorted(raw_dict.keys())}")
 
-    received_hash = data_dict.pop("hash", None)
+    received_hash = raw_dict.pop("hash", None)
+    decoded_dict.pop("hash", None)
     if not received_hash:
         raise HTTPException(status_code=401, detail="Missing hash")
 
-    # Build data-check-string: sorted key=value pairs joined by \n
-    data_check_string = "\n".join(
-        f"{k}={v}" for k, v in sorted(data_dict.items())
-    )
-
-    logger.info(f"Data-check-string (first 200): {data_check_string[:200]}")
-    logger.info(f"Token (first 15): {TELEGRAM_TOKEN[:15]}")
-
     secret_key = hmac.new(b"WebAppData", TELEGRAM_TOKEN.encode(), hashlib.sha256).digest()
-    computed_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
 
-    logger.info(f"Computed: {computed_hash[:20]}... Received: {received_hash[:20]}...")
+    # Try decoded values first (standard approach)
+    dcs_decoded = "\n".join(f"{k}={v}" for k, v in sorted(decoded_dict.items()))
+    hash_decoded = hmac.new(secret_key, dcs_decoded.encode(), hashlib.sha256).hexdigest()
 
-    if not hmac.compare_digest(computed_hash, received_hash):
+    # Try raw (URL-encoded) values as fallback
+    dcs_raw = "\n".join(f"{k}={v}" for k, v in sorted(raw_dict.items()))
+    hash_raw = hmac.new(secret_key, dcs_raw.encode(), hashlib.sha256).hexdigest()
+
+    logger.info(f"Received hash: {received_hash[:20]}...")
+    logger.info(f"Hash (decoded): {hash_decoded[:20]}...")
+    logger.info(f"Hash (raw/enc): {hash_raw[:20]}...")
+    logger.info(f"Token len={len(TELEGRAM_TOKEN)}, starts={TELEGRAM_TOKEN[:15]}")
+    logger.info(f"DCS decoded (first 300): {dcs_decoded[:300]}")
+
+    if hmac.compare_digest(hash_decoded, received_hash):
+        logger.info("Auth OK (decoded values)")
+        user_data_str = decoded_dict.get("user")
+    elif hmac.compare_digest(hash_raw, received_hash):
+        logger.info("Auth OK (raw values)")
+        user_data_str = unquote(raw_dict.get("user", ""))
+    else:
+        logger.warning("Hash mismatch — neither decoded nor raw matched")
         raise HTTPException(status_code=401, detail="Invalid hash")
 
-    user_data_str = data_dict.get("user")
     if not user_data_str:
         raise HTTPException(status_code=401, detail="Missing user data")
 
