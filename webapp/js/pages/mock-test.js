@@ -49,7 +49,7 @@ const MockTestPage = {
 
             this.renderIntro(container);
         } catch (err) {
-            const isLimit = err.message.includes('Daily limit');
+            const isLimit = err.message.includes('Daily mock limit');
             container.innerHTML = `
                 <div class="page-header">
                     <button class="back-btn" id="back-btn">&#8592;</button>
@@ -74,7 +74,7 @@ const MockTestPage = {
             container.querySelector('#home-btn')?.addEventListener('click', () => App.navigate('home'));
             container.querySelector('#upgrade-btn')?.addEventListener('click', () => {
                 if (window.Telegram?.WebApp) {
-                    window.Telegram.WebApp.openTelegramLink('https://t.me/IELTSPEAK_bot');
+                    window.Telegram.WebApp.openTelegramLink('https://t.me/abdushukur_d');
                 }
             });
         }
