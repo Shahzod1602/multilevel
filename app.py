@@ -949,19 +949,98 @@ async def upgrade_gold(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     args = context.args
-    if len(args) != 1 or not args[0].isdigit():
-        await update.message.reply_text("Usage: /upgrade_gold <user_id>")
+    if not args or len(args) < 1:
+        await update.message.reply_text(
+            "Usage:\n"
+            "/upgrade_gold <user_id>\n"
+            "/upgrade_gold @username\n\n"
+            "To downgrade:\n"
+            "/downgrade <user_id or @username>"
+        )
         return
 
-    target_user_id = int(args[0])
+    target = args[0]
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
+
+    if target.startswith("@"):
+        username = target[1:]
+        c.execute("SELECT user_id, first_name, tariff FROM users WHERE username = ?", (username,))
+    elif target.isdigit():
+        c.execute("SELECT user_id, first_name, tariff FROM users WHERE user_id = ?", (int(target),))
+    else:
+        await update.message.reply_text("❌ Provide user_id (number) or @username")
+        conn.close()
+        return
+
+    row = c.fetchone()
+    if not row:
+        await update.message.reply_text(f"❌ User not found: {target}")
+        conn.close()
+        return
+
+    target_user_id = row[0]
+    name = row[1] or target
+    old_tariff = row[2] or 'free'
+
     c.execute("UPDATE users SET tariff = 'gold' WHERE user_id = ?", (target_user_id,))
     conn.commit()
     conn.close()
 
-    await update.message.reply_text(f"✅ User {target_user_id} upgraded to gold.")
-    logging.info(f"User {user_id} upgraded {target_user_id} to gold")
+    await update.message.reply_text(
+        f"✅ User upgraded to Premium!\n\n"
+        f"👤 {name} ({target_user_id})\n"
+        f"📦 {old_tariff} → gold\n"
+        f"🎯 Mock limit: 5/day"
+    )
+    logging.info(f"Admin {user_id} upgraded {target_user_id} to gold")
+
+
+async def downgrade_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    if not is_admin(user_id):
+        await update.message.reply_text("❌ Not authorized.")
+        return
+
+    args = context.args
+    if not args or len(args) < 1:
+        await update.message.reply_text("Usage: /downgrade <user_id or @username>")
+        return
+
+    target = args[0]
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+
+    if target.startswith("@"):
+        username = target[1:]
+        c.execute("SELECT user_id, first_name FROM users WHERE username = ?", (username,))
+    elif target.isdigit():
+        c.execute("SELECT user_id, first_name FROM users WHERE user_id = ?", (int(target),))
+    else:
+        await update.message.reply_text("❌ Provide user_id or @username")
+        conn.close()
+        return
+
+    row = c.fetchone()
+    if not row:
+        await update.message.reply_text(f"❌ User not found: {target}")
+        conn.close()
+        return
+
+    target_user_id = row[0]
+    name = row[1] or target
+
+    c.execute("UPDATE users SET tariff = 'free' WHERE user_id = ?", (target_user_id,))
+    conn.commit()
+    conn.close()
+
+    await update.message.reply_text(
+        f"✅ User downgraded to Free.\n\n"
+        f"👤 {name} ({target_user_id})\n"
+        f"📦 gold → free\n"
+        f"🎯 Mock limit: 2/day"
+    )
+    logging.info(f"Admin {user_id} downgraded {target_user_id} to free")
 
 async def upload_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
@@ -1070,6 +1149,7 @@ async def main():
     application.add_handler(CommandHandler("admin_add", admin_add))
     application.add_handler(CommandHandler("send_all", send_all))
     application.add_handler(CommandHandler("upgrade_gold", upgrade_gold))
+    application.add_handler(CommandHandler("downgrade", downgrade_user))
     application.add_handler(MessageHandler(filters.PHOTO, upload_ad))
     application.add_handler(CommandHandler("stats", stats))
 
