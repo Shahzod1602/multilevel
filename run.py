@@ -7,6 +7,7 @@ import sys
 import asyncio
 import logging
 import threading
+import runpy
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -48,20 +49,16 @@ def run_web_server():
 
 
 async def run_bot():
-    """Run the Telegram bot."""
+    """Run the Telegram bot by importing app module and calling main()."""
     logger.info("Starting Telegram bot...")
-    # Import and run the existing bot
-    # We need to patch app.py to not run on import
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("app", "app.py")
-    app_module = importlib.util.module_from_spec(spec)
 
-    # Prevent app.py from executing main on import
-    original_name = "__main__"
-    app_module.__name__ = "app_module"
+    # Add current dir to path so app.py can be imported
+    if os.getcwd() not in sys.path:
+        sys.path.insert(0, os.getcwd())
 
-    spec.loader.exec_module(app_module)
-    await app_module.main()
+    # Import app.py as a regular module (it won't call main() because __name__ != "__main__")
+    import app as bot_app
+    await bot_app.main()
 
 
 def main():
