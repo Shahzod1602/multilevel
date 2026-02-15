@@ -273,7 +273,10 @@ async def session_respond(
              "-of", "default=noprint_wrappers=1:nokey=1", audio_path],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
         )
-        duration = int(float(duration_result.stdout.strip())) if duration_result.stdout.strip() else 0
+        try:
+            duration = int(float(duration_result.stdout.strip()))
+        except (ValueError, TypeError):
+            duration = 0
 
         db.add_response(session_id, question, transcription, duration, part)
 
