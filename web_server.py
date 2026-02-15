@@ -13,9 +13,10 @@ import logging
 from datetime import datetime
 from urllib.parse import parse_qs, unquote
 
+import aiohttp
 from fastapi import FastAPI, Request, HTTPException, Depends, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from typing import Optional
 
@@ -28,6 +29,8 @@ app = FastAPI(title="IELTS Speaking Mini App")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 OPENAI_KEY = os.getenv("OPENAI_API_KEY", "")
 GROQ_KEY = os.getenv("GROQ_API_KEY", "")
+ELEVENLABS_KEY = os.getenv("ELEVENLABS_API_KEY", "")
+ELEVENLABS_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"  # Rachel - clear English voice
 
 # Load questions
 QUESTIONS = []
@@ -429,6 +432,47 @@ async def get_tips(user=Depends(get_current_user)):
             },
         ]
     }
+
+
+# ─── TTS (ElevenLabs) ─────────────────────────────────────────
+
+class TTSRequest(BaseModel):
+    text: str
+
+@app.post("/api/tts")
+async def text_to_speech(body: TTSRequest, user=Depends(get_current_user)):
+    if not ELEVENLABS_KEY:
+        raise HTTPException(500, "TTS not configured")
+
+    if len(body.text) > 500:
+        raise HTTPException(400, "Text too long")
+
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}"
+    headers = {
+        "xi-api-key": ELEVENLABS_KEY,
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "text": body.text,
+        "model_id": "eleven_turbo_v2_5",
+        "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+        }
+    }
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload, headers=headers) as resp:
+                if resp.status != 200:
+                    error_text = await resp.text()
+                    logger.error(f"ElevenLabs error: {resp.status} {error_text}")
+                    raise HTTPException(502, "TTS generation failed")
+                audio_data = await resp.read()
+                return Response(content=audio_data, media_type="audio/mpeg")
+    except aiohttp.ClientError as e:
+        logger.error(f"ElevenLabs request error: {e}")
+        raise HTTPException(502, "TTS service unavailable")
 
 
 # ─── Static files (frontend) ──────────────────────────────────

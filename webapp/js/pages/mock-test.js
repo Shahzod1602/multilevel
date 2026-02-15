@@ -11,6 +11,7 @@ const MockTestPage = {
     showTranscription: true,
     recordingStartTime: null,
     autoAdvanceTimer: null,
+    currentAudio: null,
 
     async render(container) {
         this.currentPart = 1;
@@ -154,6 +155,36 @@ const MockTestPage = {
         });
 
         this.setupRecordBtn(container);
+        this.playQuestion(q.question);
+    },
+
+    async playQuestion(text) {
+        // Stop any currently playing audio
+        if (this.currentAudio) {
+            this.currentAudio.pause();
+            this.currentAudio = null;
+        }
+
+        try {
+            const initData = API.getInitData();
+            const resp = await fetch('/api/tts', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `tma ${initData}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ text }),
+            });
+
+            if (!resp.ok) return;
+
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            this.currentAudio = new Audio(url);
+            this.currentAudio.play().catch(() => {});
+        } catch (err) {
+            console.warn('TTS error:', err);
+        }
     },
 
     renderPartTransition(container) {
@@ -223,6 +254,11 @@ const MockTestPage = {
             );
 
             if (started) {
+                // Stop TTS if playing
+                if (this.currentAudio) {
+                    this.currentAudio.pause();
+                    this.currentAudio = null;
+                }
                 this.state = 'recording';
                 this.recordingStartTime = Date.now();
                 btn.classList.add('recording');
