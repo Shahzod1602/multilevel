@@ -190,6 +190,10 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
 .practice-card .icon.green { background: #D5F5E3; }
 .practice-card .icon.orange { background: #FEF3C7; }
 
+.dark .practice-card .icon.green { background: #1A3D2E; color: #00B894; }
+.dark .practice-card .icon.orange { background: #3D351A; color: #FDCB6E; }
+.dark .practice-card .icon.purple { background: var(--primary-bg); }
+
 .practice-card h3 {
     font-size: 15px;
     margin-bottom: 4px;
@@ -736,3 +740,13 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
 .mb-16 { margin-bottom: 16px; }
 .text-center { text-align: center; }
 .hidden { display: none !important; }
+
+/* ─── Transcription Choice ────────────────────────────────── */
+.transcription-choice {
+    margin-bottom: 12px;
+}
+
+/* ─── Dark Mode Feature Card Icons ────────────────────────── */
+.dark .feature-card .icon {
+    background: var(--primary-bg) !important;
+}
