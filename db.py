@@ -103,7 +103,9 @@ def migrate():
         FOREIGN KEY (user_id) REFERENCES users (user_id)
     )''')
 
-    # Add columns if they don't exist (safe)
+    conn.commit()
+
+    # Add columns if they don't exist (each in its own transaction)
     for col, col_type, default in [
         ("first_name", "TEXT", "''"),
         ("username", "TEXT", "''"),
@@ -111,24 +113,32 @@ def migrate():
     ]:
         try:
             c.execute(f"ALTER TABLE users ADD COLUMN {col} {col_type} DEFAULT {default}")
+            conn.commit()
         except Exception:
             conn.rollback()
 
     try:
         c.execute("ALTER TABLE user_settings ADD COLUMN target_score REAL DEFAULT 6.5")
+        conn.commit()
     except Exception:
         conn.rollback()
 
-    # Indexes
-    c.execute("CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at)")
-    c.execute("CREATE INDEX IF NOT EXISTS idx_attempts_attempt_time ON attempts(attempt_time)")
-    c.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)")
-    c.execute("CREATE INDEX IF NOT EXISTS idx_sessions_started_at ON sessions(started_at)")
-    c.execute("CREATE INDEX IF NOT EXISTS idx_responses_session_id ON responses(session_id)")
-    c.execute("CREATE INDEX IF NOT EXISTS idx_daily_study_user_date ON daily_study(user_id, date)")
+    # Indexes (each in its own transaction to avoid cascade failures)
+    for idx_sql in [
+        "CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at)",
+        "CREATE INDEX IF NOT EXISTS idx_attempts_attempt_time ON attempts(attempt_time)",
+        "CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_sessions_started_at ON sessions(started_at)",
+        "CREATE INDEX IF NOT EXISTS idx_responses_session_id ON responses(session_id)",
+        "CREATE INDEX IF NOT EXISTS idx_daily_study_user_date ON daily_study(user_id, date)",
+    ]:
+        try:
+            c.execute(idx_sql)
+            conn.commit()
+        except Exception:
+            conn.rollback()
 
     c.execute("INSERT INTO admins (user_id) VALUES (%s) ON CONFLICT DO NOTHING", (5471121432,))
-
     conn.commit()
     conn.close()
 
