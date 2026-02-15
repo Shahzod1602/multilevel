@@ -1,10 +1,11 @@
 """
 Database helper functions for IELTS Speaking App.
 Shared between bot (app.py) and web server (web_server.py).
-Uses PostgreSQL (Supabase).
+Uses PostgreSQL (Supabase) with connection pooling.
 """
 import os
 import psycopg2
+from psycopg2.pool import ThreadedConnectionPool
 from psycopg2.extras import RealDictCursor
 from datetime import datetime, timedelta
 
@@ -13,9 +14,23 @@ DATABASE_URL = os.getenv(
     "postgresql://postgres:shahzod1602@db.tdraljrgkafpyiiiawyi.supabase.co:5432/postgres"
 )
 
+_pool = None
+
+
+def _get_pool():
+    global _pool
+    if _pool is None:
+        _pool = ThreadedConnectionPool(2, 10, DATABASE_URL)
+    return _pool
+
 
 def get_connection():
-    conn = psycopg2.connect(DATABASE_URL)
+    pool = _get_pool()
+    conn = pool.getconn()
+    # Override close() to return connection to pool instead of closing
+    conn._pool_putconn = lambda: pool.putconn(conn)
+    original_close = conn.close
+    conn.close = conn._pool_putconn
     return conn
 
 
