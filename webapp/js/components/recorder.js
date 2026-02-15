@@ -9,6 +9,7 @@ const Recorder = {
     timerInterval: null,
     onTick: null,
     onStop: null,
+    mimeType: '',
 
     async start(onTick, onStop) {
         this.onTick = onTick;
@@ -40,6 +41,7 @@ const Recorder = {
                 }
             }
 
+            this.mimeType = mimeType || 'audio/webm';
             this.mediaRecorder = new MediaRecorder(this.stream, mimeType ? { mimeType } : {});
 
             this.mediaRecorder.ondataavailable = (e) => {
@@ -47,12 +49,12 @@ const Recorder = {
             };
 
             this.mediaRecorder.onstop = () => {
-                const blob = new Blob(this.chunks, { type: mimeType || 'audio/webm' });
+                const blob = new Blob(this.chunks, { type: this.mimeType });
                 this.cleanup();
                 if (this.onStop) this.onStop(blob);
             };
 
-            this.mediaRecorder.start(1000); // Collect data every second
+            this.mediaRecorder.start(); // Collect all data at once for valid file
             this.startTime = Date.now();
 
             // Timer

@@ -243,35 +243,43 @@ async def session_respond(
     if session["user_id"] != user["user_id"]:
         raise HTTPException(403, "Not your session")
 
-    # Save audio to temp file
+    # Save audio to temp file — detect extension from content type
     audio_data = await audio.read()
     if len(audio_data) < 1000:
         raise HTTPException(400, "Audio too short")
 
-    with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
+    # Map content type to extension
+    ct = (audio.content_type or "").lower()
+    ext_map = {
+        "audio/webm": ".webm", "audio/ogg": ".ogg",
+        "audio/mp4": ".m4a", "audio/mpeg": ".mp3",
+        "audio/wav": ".wav", "audio/x-wav": ".wav",
+    }
+    ext = ext_map.get(ct.split(";")[0], ".ogg")
+
+    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
         tmp.write(audio_data)
         tmp.flush()
         audio_path = tmp.name
 
-    wav_path = audio_path.replace(".webm", ".wav")
+    wav_path = audio_path + ".wav"
 
     try:
-        # Convert webm to wav for Groq compatibility
+        # Convert to wav for Groq compatibility
         convert_result = subprocess.run(
             ["ffmpeg", "-y", "-i", audio_path, "-ar", "16000", "-ac", "1", wav_path],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
         )
-        if convert_result.returncode != 0:
-            logger.error(f"FFmpeg convert error: {convert_result.stderr}")
-            raise HTTPException(400, "Audio conversion failed")
 
-        # Transcribe with Groq Whisper API
+        # If conversion fails, try sending original directly to Groq
+        use_path = wav_path if convert_result.returncode == 0 else audio_path
+
         from groq import Groq
         groq_client = Groq(api_key=GROQ_KEY)
 
-        with open(wav_path, "rb") as audio_file:
+        with open(use_path, "rb") as audio_file:
             transcription_result = groq_client.audio.transcriptions.create(
-                file=(wav_path, audio_file.read()),
+                file=(use_path, audio_file.read()),
                 model="whisper-large-v3",
                 language="en",
                 prompt=f"IELTS Speaking Part {part} response to: {question}",
@@ -284,7 +292,7 @@ async def session_respond(
         # Get audio duration via ffprobe
         duration_result = subprocess.run(
             ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-             "-of", "default=noprint_wrappers=1:nokey=1", wav_path],
+             "-of", "default=noprint_wrappers=1:nokey=1", use_path],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
         )
         try:

@@ -279,8 +279,10 @@ const MockTestPage = {
 
         try {
             const q = this.allQuestions[this.currentPart][this.currentIndex];
+            const extMap = {'audio/webm': '.webm', 'audio/ogg': '.ogg', 'audio/mp4': '.m4a', 'audio/mpeg': '.mp3'};
+            const ext = extMap[(Recorder.mimeType || '').split(';')[0]] || '.ogg';
             const formData = new FormData();
-            formData.append('audio', blob, 'recording.webm');
+            formData.append('audio', blob, `recording${ext}`);
             formData.append('question', q.question);
             formData.append('part', this.currentPart);
 
