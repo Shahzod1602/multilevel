@@ -8,3 +8,4 @@ apscheduler
 fastapi
 uvicorn[standard]
 python-multipart
+edge-tts

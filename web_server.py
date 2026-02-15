@@ -13,7 +13,6 @@ import logging
 from datetime import datetime
 from urllib.parse import parse_qs, unquote
 
-import aiohttp
 from fastapi import FastAPI, Request, HTTPException, Depends, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response
@@ -29,12 +28,11 @@ app = FastAPI(title="IELTS Speaking Mini App")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 OPENAI_KEY = os.getenv("OPENAI_API_KEY", "")
 GROQ_KEY = os.getenv("GROQ_API_KEY", "")
-ELEVENLABS_KEY = os.getenv("ELEVENLABS_API_KEY", "")
-ELEVENLABS_VOICES = {
-    "sarah": "EXAVITQu4vr4xnSDxMaL",
-    "lily": "pFZP5JQG7iQjIQuC4Bku",
-    "charlie": "IKne3meq5aSn9XLyUdCD",
-    "roger": "CwhRBWXzGAHq8TQ4Fs17",
+EDGE_TTS_VOICES = {
+    "sarah": "en-US-JennyNeural",
+    "lily": "en-GB-SoniaNeural",
+    "charlie": "en-US-ChristopherNeural",
+    "roger": "en-GB-RyanNeural",
 }
 
 # Load questions
@@ -467,38 +465,27 @@ class TTSRequest(BaseModel):
 
 @app.post("/api/tts")
 async def text_to_speech(body: TTSRequest, user=Depends(get_current_user)):
-    if not ELEVENLABS_KEY:
-        raise HTTPException(500, "TTS not configured")
+    import edge_tts
 
     if len(body.text) > 500:
         raise HTTPException(400, "Text too long")
 
-    voice_id = ELEVENLABS_VOICES.get(body.voice, ELEVENLABS_VOICES["sarah"])
-    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
-    headers = {
-        "xi-api-key": ELEVENLABS_KEY,
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "text": body.text,
-        "model_id": "eleven_turbo_v2_5",
-        "voice_settings": {
-            "stability": 0.5,
-            "similarity_boost": 0.75,
-        }
-    }
+    voice = EDGE_TTS_VOICES.get(body.voice, EDGE_TTS_VOICES["sarah"])
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=payload, headers=headers) as resp:
-                if resp.status != 200:
-                    error_text = await resp.text()
-                    logger.error(f"ElevenLabs error: {resp.status} {error_text}")
-                    raise HTTPException(502, "TTS generation failed")
-                audio_data = await resp.read()
-                return Response(content=audio_data, media_type="audio/mpeg")
-    except aiohttp.ClientError as e:
-        logger.error(f"ElevenLabs request error: {e}")
+        communicate = edge_tts.Communicate(body.text, voice)
+        audio_chunks = []
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                audio_chunks.append(chunk["data"])
+
+        if not audio_chunks:
+            raise HTTPException(502, "TTS generation failed")
+
+        audio_data = b"".join(audio_chunks)
+        return Response(content=audio_data, media_type="audio/mpeg")
+    except Exception as e:
+        logger.error(f"Edge TTS error: {e}")
         raise HTTPException(502, "TTS service unavailable")
 
 
