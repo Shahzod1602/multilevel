@@ -44,37 +44,33 @@ except FileNotFoundError:
 
 def validate_init_data(init_data: str) -> dict:
     """Validate Telegram Mini App initData using HMAC-SHA256."""
-    # initData comes as URL query string: key=value&key=value
-    # parse_qs decodes values, but for HMAC we need raw pairs
-    try:
-        parsed = dict(pair.split("=", 1) for pair in init_data.split("&") if "=" in pair)
-    except Exception:
-        raise HTTPException(status_code=401, detail="Malformed init data")
+    # parse_qs URL-decodes values automatically
+    parsed = parse_qs(init_data, keep_blank_values=True)
+    # parse_qs returns lists, flatten to single values
+    data_dict = {k: v[0] for k, v in parsed.items()}
 
-    received_hash = parsed.get("hash")
+    received_hash = data_dict.pop("hash", None)
     if not received_hash:
         raise HTTPException(status_code=401, detail="Missing hash")
 
-    # Build data-check-string: sorted key=value pairs (excluding hash), joined by \n
-    data_check_pairs = []
-    for key, value in sorted(parsed.items()):
-        if key != "hash":
-            data_check_pairs.append(f"{key}={value}")
-    data_check_string = "\n".join(data_check_pairs)
+    # Build data-check-string with URL-decoded values, sorted by key
+    data_check_string = "\n".join(
+        f"{k}={v}" for k, v in sorted(data_dict.items())
+    )
 
     secret_key = hmac.new(b"WebAppData", TELEGRAM_TOKEN.encode(), hashlib.sha256).digest()
     computed_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
 
     if not hmac.compare_digest(computed_hash, received_hash):
-        logger.warning(f"Hash mismatch. Expected: {computed_hash[:16]}... Got: {received_hash[:16]}...")
+        logger.warning(f"Hash mismatch. Token starts with: {TELEGRAM_TOKEN[:10]}...")
         raise HTTPException(status_code=401, detail="Invalid hash")
 
-    # Extract user data
-    user_data_str = parsed.get("user")
+    # Extract user data (already URL-decoded by parse_qs)
+    user_data_str = data_dict.get("user")
     if not user_data_str:
         raise HTTPException(status_code=401, detail="Missing user data")
 
-    user_data = json.loads(unquote(user_data_str))
+    user_data = json.loads(user_data_str)
     return user_data
 
 
