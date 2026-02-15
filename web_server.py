@@ -253,14 +253,25 @@ async def session_respond(
         tmp.flush()
         audio_path = tmp.name
 
+    wav_path = audio_path.replace(".webm", ".wav")
+
     try:
+        # Convert webm to wav for Groq compatibility
+        convert_result = subprocess.run(
+            ["ffmpeg", "-y", "-i", audio_path, "-ar", "16000", "-ac", "1", wav_path],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+        )
+        if convert_result.returncode != 0:
+            logger.error(f"FFmpeg convert error: {convert_result.stderr}")
+            raise HTTPException(400, "Audio conversion failed")
+
         # Transcribe with Groq Whisper API
         from groq import Groq
         groq_client = Groq(api_key=GROQ_KEY)
 
-        with open(audio_path, "rb") as audio_file:
+        with open(wav_path, "rb") as audio_file:
             transcription_result = groq_client.audio.transcriptions.create(
-                file=(audio_path, audio_file.read()),
+                file=(wav_path, audio_file.read()),
                 model="whisper-large-v3",
                 language="en",
                 prompt=f"IELTS Speaking Part {part} response to: {question}",
@@ -273,7 +284,7 @@ async def session_respond(
         # Get audio duration via ffprobe
         duration_result = subprocess.run(
             ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-             "-of", "default=noprint_wrappers=1:nokey=1", audio_path],
+             "-of", "default=noprint_wrappers=1:nokey=1", wav_path],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
         )
         try:
@@ -289,10 +300,11 @@ async def session_respond(
         }
 
     finally:
-        try:
-            os.remove(audio_path)
-        except OSError:
-            pass
+        for f in [audio_path, wav_path]:
+            try:
+                os.remove(f)
+            except OSError:
+                pass
 
 
 @app.post("/api/sessions/{session_id}/complete")
