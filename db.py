@@ -24,14 +24,29 @@ def _get_pool():
     return _pool
 
 
+class PooledConnection:
+    """Wrapper that returns connection to pool on close() instead of closing."""
+    def __init__(self, conn, pool):
+        self._conn = conn
+        self._pool = pool
+
+    def close(self):
+        self._pool.putconn(self._conn)
+
+    def cursor(self, **kwargs):
+        return self._conn.cursor(**kwargs)
+
+    def commit(self):
+        self._conn.commit()
+
+    def rollback(self):
+        self._conn.rollback()
+
+
 def get_connection():
     pool = _get_pool()
     conn = pool.getconn()
-    # Override close() to return connection to pool instead of closing
-    conn._pool_putconn = lambda: pool.putconn(conn)
-    original_close = conn.close
-    conn.close = conn._pool_putconn
-    return conn
+    return PooledConnection(conn, pool)
 
 
 def migrate():
