@@ -44,28 +44,39 @@ except FileNotFoundError:
 
 def validate_init_data(init_data: str) -> dict:
     """Validate Telegram Mini App initData using HMAC-SHA256."""
-    # parse_qs URL-decodes values automatically
-    parsed = parse_qs(init_data, keep_blank_values=True)
-    # parse_qs returns lists, flatten to single values
-    data_dict = {k: v[0] for k, v in parsed.items()}
+    # Strip any whitespace
+    init_data = init_data.strip()
+
+    # Manual split + unquote (not parse_qs which converts + to space)
+    data_dict = {}
+    for pair in init_data.split("&"):
+        if "=" not in pair:
+            continue
+        key, value = pair.split("=", 1)
+        data_dict[key] = unquote(value)
+
+    logger.info(f"Auth keys: {sorted(data_dict.keys())}")
 
     received_hash = data_dict.pop("hash", None)
     if not received_hash:
         raise HTTPException(status_code=401, detail="Missing hash")
 
-    # Build data-check-string with URL-decoded values, sorted by key
+    # Build data-check-string: sorted key=value pairs joined by \n
     data_check_string = "\n".join(
         f"{k}={v}" for k, v in sorted(data_dict.items())
     )
 
+    logger.info(f"Data-check-string (first 200): {data_check_string[:200]}")
+    logger.info(f"Token (first 15): {TELEGRAM_TOKEN[:15]}")
+
     secret_key = hmac.new(b"WebAppData", TELEGRAM_TOKEN.encode(), hashlib.sha256).digest()
     computed_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
 
+    logger.info(f"Computed: {computed_hash[:20]}... Received: {received_hash[:20]}...")
+
     if not hmac.compare_digest(computed_hash, received_hash):
-        logger.warning(f"Hash mismatch. Token starts with: {TELEGRAM_TOKEN[:10]}...")
         raise HTTPException(status_code=401, detail="Invalid hash")
 
-    # Extract user data (already URL-decoded by parse_qs)
     user_data_str = data_dict.get("user")
     if not user_data_str:
         raise HTTPException(status_code=401, detail="Missing user data")
@@ -109,6 +120,31 @@ class SettingsUpdate(BaseModel):
 class SessionStart(BaseModel):
     type: str = "practice"
     part: int = 1
+
+
+# ─── Debug Endpoint ───────────────────────────────────────────
+
+@app.get("/api/debug/auth")
+async def debug_auth(request: Request):
+    """Debug endpoint to inspect auth header and validation."""
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("tma "):
+        init_data = auth[4:]
+    else:
+        init_data = auth
+
+    # Show raw data
+    pairs = init_data.split("&")
+    raw_keys = [p.split("=", 1)[0] for p in pairs if "=" in p]
+
+    return {
+        "auth_header_length": len(auth),
+        "init_data_length": len(init_data),
+        "raw_first_100": init_data[:100],
+        "keys": raw_keys,
+        "token_first_15": TELEGRAM_TOKEN[:15],
+        "token_length": len(TELEGRAM_TOKEN),
+    }
 
 
 # ─── API Endpoints ─────────────────────────────────────────────
