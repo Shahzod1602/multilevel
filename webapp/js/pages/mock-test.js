@@ -9,6 +9,7 @@ const MockTestPage = {
     responses: [],
     state: 'idle',
     showTranscription: true,
+    selectedVoice: null,  // null = no TTS, or 'sarah','lily','charlie','roger'
     recordingStartTime: null,
     autoAdvanceTimer: null,
     currentAudio: null,
@@ -19,6 +20,7 @@ const MockTestPage = {
         this.responses = [];
         this.state = 'idle';
         this.showTranscription = true;
+        this.selectedVoice = null;
         this.recordingStartTime = null;
         this.clearAutoAdvance();
 
@@ -74,22 +76,82 @@ const MockTestPage = {
             </div>
 
             <div class="card mt-12">
-                <h3>Transcription Mode</h3>
-                <p class="text-secondary text-sm mt-8">Choose whether to see your speech transcribed after each answer.</p>
-                <div class="transcription-toggle mt-12">
-                    <button class="btn btn-primary" id="mode-with">With Transcription</button>
-                    <button class="btn btn-outline mt-8" id="mode-without">Without Transcription</button>
+                <div class="setting-row">
+                    <div>
+                        <h3>Transcription</h3>
+                        <p class="text-secondary text-sm">Show your speech text after each answer</p>
+                    </div>
+                    <div class="toggle ${this.showTranscription ? 'active' : ''}" id="transcription-toggle"></div>
                 </div>
             </div>
+
+            <div class="card mt-12">
+                <h3>Examiner Voice</h3>
+                <p class="text-secondary text-sm mt-4">Choose a voice to read questions aloud</p>
+                <div class="voice-grid mt-12">
+                    <div class="voice-card" data-voice="sarah">
+                        <div class="voice-icon female">S</div>
+                        <div class="voice-info">
+                            <span class="voice-name">Sarah</span>
+                            <span class="voice-desc">Confident</span>
+                        </div>
+                        <div class="voice-radio"></div>
+                    </div>
+                    <div class="voice-card" data-voice="lily">
+                        <div class="voice-icon female">L</div>
+                        <div class="voice-info">
+                            <span class="voice-name">Lily</span>
+                            <span class="voice-desc">British</span>
+                        </div>
+                        <div class="voice-radio"></div>
+                    </div>
+                    <div class="voice-card" data-voice="charlie">
+                        <div class="voice-icon male">C</div>
+                        <div class="voice-info">
+                            <span class="voice-name">Charlie</span>
+                            <span class="voice-desc">Deep</span>
+                        </div>
+                        <div class="voice-radio"></div>
+                    </div>
+                    <div class="voice-card" data-voice="roger">
+                        <div class="voice-icon male">R</div>
+                        <div class="voice-info">
+                            <span class="voice-name">Roger</span>
+                            <span class="voice-desc">Casual</span>
+                        </div>
+                        <div class="voice-radio"></div>
+                    </div>
+                </div>
+            </div>
+
+            <button class="btn btn-primary mt-16" id="start-btn">Start Test</button>
         `;
 
         container.querySelector('#back-btn').addEventListener('click', () => App.navigate('home'));
-        container.querySelector('#mode-with').addEventListener('click', () => {
-            this.showTranscription = true;
-            this.renderQuestion(container);
+
+        // Transcription toggle
+        const toggle = container.querySelector('#transcription-toggle');
+        toggle.addEventListener('click', () => {
+            this.showTranscription = !this.showTranscription;
+            toggle.classList.toggle('active', this.showTranscription);
         });
-        container.querySelector('#mode-without').addEventListener('click', () => {
-            this.showTranscription = false;
+
+        // Voice selection (radio style — tap to select, tap again to deselect)
+        container.querySelectorAll('.voice-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const voice = card.dataset.voice;
+                if (this.selectedVoice === voice) {
+                    this.selectedVoice = null;
+                    card.classList.remove('selected');
+                } else {
+                    container.querySelectorAll('.voice-card').forEach(c => c.classList.remove('selected'));
+                    this.selectedVoice = voice;
+                    card.classList.add('selected');
+                }
+            });
+        });
+
+        container.querySelector('#start-btn').addEventListener('click', () => {
             this.renderQuestion(container);
         });
     },
@@ -165,6 +227,9 @@ const MockTestPage = {
             this.currentAudio = null;
         }
 
+        // Skip if no voice selected
+        if (!this.selectedVoice) return;
+
         try {
             const initData = API.getInitData();
             const resp = await fetch('/api/tts', {
@@ -173,7 +238,7 @@ const MockTestPage = {
                     'Authorization': `tma ${initData}`,
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ text }),
+                body: JSON.stringify({ text, voice: this.selectedVoice }),
             });
 
             if (!resp.ok) return;

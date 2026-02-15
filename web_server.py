@@ -30,7 +30,12 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 OPENAI_KEY = os.getenv("OPENAI_API_KEY", "")
 GROQ_KEY = os.getenv("GROQ_API_KEY", "")
 ELEVENLABS_KEY = os.getenv("ELEVENLABS_API_KEY", "")
-ELEVENLABS_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"  # Rachel - clear English voice
+ELEVENLABS_VOICES = {
+    "sarah": "EXAVITQu4vr4xnSDxMaL",
+    "lily": "pFZP5JQG7iQjIQuC4Bku",
+    "charlie": "IKne3meq5aSn9XLyUdCD",
+    "roger": "CwhRBWXzGAHq8TQ4Fs17",
+}
 
 # Load questions
 QUESTIONS = []
@@ -458,6 +463,7 @@ async def get_tips(user=Depends(get_current_user)):
 
 class TTSRequest(BaseModel):
     text: str
+    voice: str = "sarah"
 
 @app.post("/api/tts")
 async def text_to_speech(body: TTSRequest, user=Depends(get_current_user)):
@@ -467,7 +473,8 @@ async def text_to_speech(body: TTSRequest, user=Depends(get_current_user)):
     if len(body.text) > 500:
         raise HTTPException(400, "Text too long")
 
-    url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}"
+    voice_id = ELEVENLABS_VOICES.get(body.voice, ELEVENLABS_VOICES["sarah"])
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
     headers = {
         "xi-api-key": ELEVENLABS_KEY,
         "Content-Type": "application/json",
