@@ -44,28 +44,33 @@ except FileNotFoundError:
 
 def validate_init_data(init_data: str) -> dict:
     """Validate Telegram Mini App initData using HMAC-SHA256."""
-    parsed = parse_qs(init_data)
-    received_hash = parsed.get("hash", [None])[0]
+    # initData comes as URL query string: key=value&key=value
+    # parse_qs decodes values, but for HMAC we need raw pairs
+    try:
+        parsed = dict(pair.split("=", 1) for pair in init_data.split("&") if "=" in pair)
+    except Exception:
+        raise HTTPException(status_code=401, detail="Malformed init data")
+
+    received_hash = parsed.get("hash")
     if not received_hash:
         raise HTTPException(status_code=401, detail="Missing hash")
 
-    # Build data-check-string
-    pairs = []
-    for key_val in init_data.split("&"):
-        key = key_val.split("=", 1)[0]
+    # Build data-check-string: sorted key=value pairs (excluding hash), joined by \n
+    data_check_pairs = []
+    for key, value in sorted(parsed.items()):
         if key != "hash":
-            pairs.append(key_val)
-    pairs.sort()
-    data_check_string = "\n".join(pairs)
+            data_check_pairs.append(f"{key}={value}")
+    data_check_string = "\n".join(data_check_pairs)
 
     secret_key = hmac.new(b"WebAppData", TELEGRAM_TOKEN.encode(), hashlib.sha256).digest()
     computed_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
 
     if not hmac.compare_digest(computed_hash, received_hash):
+        logger.warning(f"Hash mismatch. Expected: {computed_hash[:16]}... Got: {received_hash[:16]}...")
         raise HTTPException(status_code=401, detail="Invalid hash")
 
     # Extract user data
-    user_data_str = parsed.get("user", [None])[0]
+    user_data_str = parsed.get("user")
     if not user_data_str:
         raise HTTPException(status_code=401, detail="Missing user data")
 
@@ -76,10 +81,15 @@ def validate_init_data(init_data: str) -> dict:
 async def get_current_user(request: Request) -> dict:
     """Dependency: extract and validate user from Authorization header."""
     auth = request.headers.get("Authorization", "")
-    if not auth.startswith("tma "):
+
+    # Support both "tma <data>" and raw initData
+    if auth.startswith("tma "):
+        init_data = auth[4:]
+    elif auth:
+        init_data = auth
+    else:
         raise HTTPException(status_code=401, detail="Missing authorization")
 
-    init_data = auth[4:]  # Remove "tma " prefix
     user_data = validate_init_data(init_data)
 
     user = db.get_or_create_user(

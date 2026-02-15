@@ -16,6 +16,10 @@ const App = {
             tg.expand();
             tg.setHeaderColor('#F5F5F7');
             tg.setBackgroundColor('#F5F5F7');
+            console.log('initData length:', tg.initData?.length);
+            console.log('initData:', tg.initData?.substring(0, 100));
+        } else {
+            console.warn('Telegram WebApp not available');
         }
 
         // Load user data
