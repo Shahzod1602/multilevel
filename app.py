@@ -15,7 +15,7 @@ from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InputFile, Inl
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 import openai
 from gtts import gTTS
-import whisper
+from groq import Groq
 import re
 import math
 from dotenv import load_dotenv
@@ -48,13 +48,8 @@ if not TELEGRAM_TOKEN or not OPENAI_KEY:
     raise ValueError("❌ Missing TELEGRAM_BOT_TOKEN or OPENAI_API_KEY")
 
 openai.api_key = OPENAI_KEY
-
-# Load Whisper model (small, CPU)
-try:
-    whisper_model = whisper.load_model("small").to("cpu")
-except Exception as e:
-    logging.error(f"Failed to load Whisper model: {str(e)}")
-    raise SystemExit(f"❌ Failed to load Whisper model: {str(e)}")
+GROQ_KEY = os.getenv("GROQ_API_KEY", "")
+groq_client = Groq(api_key=GROQ_KEY)
 
 # Database configuration
 DB_NAME = "bot.db"
@@ -505,14 +500,14 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             }.get(current_part, f"Response to IELTS question: {current_question}")
 
             logging.info(f"User {user_id}: Starting transcription at {datetime.utcnow().isoformat()}")
-            result = whisper_model.transcribe(
-                wav_path,
-                language='en',
-                fp16=False,
-                initial_prompt=initial_prompt,
-                temperature=0
-            )
-            transcription = result['text'].strip()
+            with open(wav_path, "rb") as audio_file:
+                result = groq_client.audio.transcriptions.create(
+                    file=(wav_path, audio_file.read()),
+                    model="distil-whisper-large-v3-en",
+                    language="en",
+                    prompt=initial_prompt,
+                )
+            transcription = result.text.strip()
             transcription = (
                 transcription.replace("CD center", "city center")
                 .replace("store card", "stone arch")
