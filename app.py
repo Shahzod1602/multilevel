@@ -503,7 +503,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             with open(wav_path, "rb") as audio_file:
                 result = groq_client.audio.transcriptions.create(
                     file=(wav_path, audio_file.read()),
-                    model="whisper-large-v3-turbo",
+                    model="whisper-large-v3",
                     language="en",
                     prompt=initial_prompt,
                 )

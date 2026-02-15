@@ -258,7 +258,7 @@ async def session_respond(
         with open(audio_path, "rb") as audio_file:
             transcription_result = groq_client.audio.transcriptions.create(
                 file=(audio_path, audio_file.read()),
-                model="whisper-large-v3-turbo",
+                model="whisper-large-v3",
                 language="en",
                 prompt=f"IELTS Speaking Part {part} response to: {question}",
             )
