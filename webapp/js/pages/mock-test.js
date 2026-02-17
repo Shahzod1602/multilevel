@@ -262,7 +262,7 @@ const MockTestPage = {
 
             <div class="question-card">
                 <span class="part-badge">Part ${part} - Q${this.currentIndex + 1}/${totalQ}</span>
-                <p class="question-text mt-12">${q.question}</p>
+                <p class="question-text mt-12">${q}</p>
             </div>
 
             <div class="recorder-area" id="recorder-area">
@@ -293,7 +293,7 @@ const MockTestPage = {
         });
 
         this.setupRecordBtn(container);
-        this.playQuestion(q.question);
+        this.playQuestion(q);
     },
 
     renderDebateSelection(container) {
@@ -507,7 +507,7 @@ const MockTestPage = {
         try {
             const questionText = isDebate
                 ? this.currentPartData.topic
-                : this.currentQuestions[this.currentIndex].question;
+                : this.currentQuestions[this.currentIndex];
 
             const extMap = {'audio/webm': '.webm', 'audio/ogg': '.ogg', 'audio/mp4': '.m4a', 'audio/mpeg': '.mp3'};
             const ext = extMap[(Recorder.mimeType || '').split(';')[0]] || '.ogg';
@@ -712,7 +712,7 @@ const MockTestPage = {
                     const part2Qs = this.test?.parts?.["2"]?.questions || [];
                     const firstQ = part2Qs[0] || this.test?.parts?.["1.1"]?.questions?.[0];
                     if (!firstQ) throw new Error('No question');
-                    const sampleResult = await API.post('/api/sample-answer', { question: firstQ.question, part: "2" });
+                    const sampleResult = await API.post('/api/sample-answer', { question: firstQ, part: "2" });
                     sampleArea.innerHTML = `
                         <div class="sample-card">
                             <h3>Sample Answer (Score 60+)</h3>

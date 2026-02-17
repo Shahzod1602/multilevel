@@ -98,7 +98,7 @@ const PracticePage = {
 
             <div class="question-card">
                 <span class="part-badge">Question ${progress}</span>
-                <p class="question-text mt-12">${q.question}</p>
+                <p class="question-text mt-12">${q}</p>
             </div>
 
             <div class="recorder-area" id="recorder-area">
@@ -252,7 +252,7 @@ const PracticePage = {
         try {
             const questionText = isDebate
                 ? this.partData.topic
-                : this.questions[this.currentIndex].question;
+                : this.questions[this.currentIndex];
 
             const extMap = {'audio/webm': '.webm', 'audio/ogg': '.ogg', 'audio/mp4': '.m4a', 'audio/mpeg': '.mp3'};
             const ext = extMap[(Recorder.mimeType || '').split(';')[0]] || '.ogg';
@@ -460,8 +460,8 @@ const PracticePage = {
             container.querySelector('#sample-btn').addEventListener('click', async () => {
                 sampleArea.innerHTML = `<div class="loading"><div class="spinner"></div><span>Generating sample...</span></div>`;
                 try {
-                    const q = this.questions[0] || { question: this.partData?.topic || '' };
-                    const sampleResult = await API.post('/api/sample-answer', { question: q.question, part: this.part });
+                    const q = this.questions[0] || this.partData?.topic || '';
+                    const sampleResult = await API.post('/api/sample-answer', { question: q, part: this.part });
                     sampleArea.innerHTML = `
                         <div class="sample-card">
                             <h3>Sample Answer (Score 60+)</h3>
