@@ -87,6 +87,15 @@ const App = {
             case 'history':
                 HistoryPage.render(this.container, params);
                 break;
+            case 'leaderboard':
+                LeaderboardPage.render(this.container);
+                break;
+            case 'vocabulary':
+                VocabularyPage.render(this.container);
+                break;
+            case 'admin':
+                AdminPage.render(this.container);
+                break;
             default:
                 HomePage.render(this.container);
         }

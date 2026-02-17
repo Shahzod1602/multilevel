@@ -142,6 +142,9 @@ def migrate():
     conn.commit()
     conn.close()
 
+    # Run referral migrations
+    migrate_referrals()
+
 
 def score_to_cefr(score):
     """Convert 0-75 score to CEFR level."""
@@ -470,3 +473,245 @@ def get_total_practice_hours(user_id):
     conn.close()
     total_minutes = row["total"] if row else 0
     return round(total_minutes / 60, 1)
+
+
+# ─── Leaderboard helpers ─────────────────────────────────────
+
+def get_leaderboard(limit=20, min_sessions=3):
+    """Get top users by average overall score, requiring minimum sessions."""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+        SELECT u.user_id, u.first_name, u.username,
+               COUNT(s.id) as sessions,
+               ROUND(AVG(s.score_overall), 1) as avg_score
+        FROM users u
+        JOIN sessions s ON s.user_id = u.user_id
+        WHERE s.status = 'completed' AND s.score_overall IS NOT NULL
+        GROUP BY u.user_id
+        HAVING COUNT(s.id) >= ?
+        ORDER BY avg_score DESC
+        LIMIT ?
+    """, (min_sessions, limit))
+    rows = c.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_user_rank(user_id, min_sessions=3):
+    """Get user's rank among all users with enough sessions."""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+        SELECT user_id, avg_score, sessions FROM (
+            SELECT u.user_id,
+                   ROUND(AVG(s.score_overall), 1) as avg_score,
+                   COUNT(s.id) as sessions
+            FROM users u
+            JOIN sessions s ON s.user_id = u.user_id
+            WHERE s.status = 'completed' AND s.score_overall IS NOT NULL
+            GROUP BY u.user_id
+            HAVING COUNT(s.id) >= ?
+        )
+        ORDER BY avg_score DESC
+    """, (min_sessions,))
+    rows = c.fetchall()
+    conn.close()
+    for i, r in enumerate(rows):
+        if r["user_id"] == user_id:
+            return {"rank": i + 1, "avg_score": r["avg_score"], "sessions": r["sessions"]}
+    return None
+
+
+# ─── Admin helpers ────────────────────────────────────────────
+
+def is_admin(user_id):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT 1 FROM admins WHERE user_id = ?", (user_id,))
+    result = c.fetchone()
+    conn.close()
+    return bool(result)
+
+
+def get_admin_stats():
+    conn = get_connection()
+    c = conn.cursor()
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+
+    c.execute("SELECT COUNT(*) as cnt FROM users")
+    total_users = c.fetchone()["cnt"]
+
+    c.execute("SELECT COUNT(DISTINCT user_id) as cnt FROM sessions WHERE date(started_at) = ?", (today,))
+    active_today = c.fetchone()["cnt"]
+
+    c.execute("SELECT COUNT(*) as cnt FROM sessions WHERE date(started_at) = ?", (today,))
+    sessions_today = c.fetchone()["cnt"]
+
+    c.execute("SELECT COUNT(*) as cnt FROM users WHERE tariff != 'free'")
+    premium_count = c.fetchone()["cnt"]
+
+    conn.close()
+    return {
+        "total_users": total_users,
+        "active_today": active_today,
+        "sessions_today": sessions_today,
+        "premium_count": premium_count,
+    }
+
+
+def search_users(query, limit=20):
+    conn = get_connection()
+    c = conn.cursor()
+    like = f"%{query}%"
+    c.execute("""
+        SELECT u.user_id, u.first_name, u.username, u.tariff, u.created_at,
+               COUNT(s.id) as sessions
+        FROM users u
+        LEFT JOIN sessions s ON s.user_id = u.user_id AND s.status = 'completed'
+        WHERE u.first_name LIKE ? OR u.username LIKE ? OR CAST(u.user_id AS TEXT) LIKE ?
+        GROUP BY u.user_id
+        ORDER BY u.created_at DESC
+        LIMIT ?
+    """, (like, like, like, limit))
+    rows = c.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def update_user_tariff(user_id, tariff):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("UPDATE users SET tariff = ? WHERE user_id = ?", (tariff, user_id))
+    conn.commit()
+    conn.close()
+
+
+# ─── Referral helpers ─────────────────────────────────────────
+
+def migrate_referrals():
+    """Create referral tables and columns."""
+    conn = get_connection()
+    c = conn.cursor()
+
+    c.execute('''CREATE TABLE IF NOT EXISTS referrals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        referrer_id INTEGER NOT NULL,
+        referred_id INTEGER NOT NULL,
+        rewarded INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (referrer_id) REFERENCES users (user_id),
+        FOREIGN KEY (referred_id) REFERENCES users (user_id)
+    )''')
+
+    for col, col_type, default in [
+        ("referral_code", "TEXT", "NULL"),
+        ("bonus_mocks", "INTEGER", "0"),
+    ]:
+        try:
+            c.execute(f"ALTER TABLE users ADD COLUMN {col} {col_type} DEFAULT {default}")
+        except sqlite3.OperationalError:
+            pass
+
+    c.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id)")
+    c.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_referral_code ON users(referral_code)")
+
+    conn.commit()
+    conn.close()
+
+
+def generate_referral_code(user_id):
+    """Generate unique 8-char referral code for user."""
+    import string
+    import random as rnd
+
+    conn = get_connection()
+    c = conn.cursor()
+
+    # Check if already has code
+    c.execute("SELECT referral_code FROM users WHERE user_id = ?", (user_id,))
+    row = c.fetchone()
+    if row and row["referral_code"]:
+        conn.close()
+        return row["referral_code"]
+
+    # Generate unique code
+    chars = string.ascii_uppercase + string.digits
+    for _ in range(10):
+        code = ''.join(rnd.choices(chars, k=8))
+        c.execute("SELECT 1 FROM users WHERE referral_code = ?", (code,))
+        if not c.fetchone():
+            c.execute("UPDATE users SET referral_code = ? WHERE user_id = ?", (code, user_id))
+            conn.commit()
+            conn.close()
+            return code
+
+    conn.close()
+    return None
+
+
+def process_referral(referred_id, code):
+    """Apply referral code: both users get +1 bonus mock."""
+    conn = get_connection()
+    c = conn.cursor()
+
+    # Find referrer
+    c.execute("SELECT user_id FROM users WHERE referral_code = ?", (code,))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        return {"error": "Invalid referral code"}
+
+    referrer_id = row["user_id"]
+    if referrer_id == referred_id:
+        conn.close()
+        return {"error": "Cannot use your own code"}
+
+    # Check if already referred
+    c.execute("SELECT 1 FROM referrals WHERE referred_id = ?", (referred_id,))
+    if c.fetchone():
+        conn.close()
+        return {"error": "You have already used a referral code"}
+
+    # Create referral and reward both
+    c.execute("INSERT INTO referrals (referrer_id, referred_id, rewarded) VALUES (?, ?, 1)",
+              (referrer_id, referred_id))
+    c.execute("UPDATE users SET bonus_mocks = COALESCE(bonus_mocks, 0) + 1 WHERE user_id = ?", (referrer_id,))
+    c.execute("UPDATE users SET bonus_mocks = COALESCE(bonus_mocks, 0) + 1 WHERE user_id = ?", (referred_id,))
+
+    conn.commit()
+    conn.close()
+    return {"success": True}
+
+
+def get_referral_stats(user_id):
+    conn = get_connection()
+    c = conn.cursor()
+
+    c.execute("SELECT referral_code, COALESCE(bonus_mocks, 0) as bonus_mocks FROM users WHERE user_id = ?", (user_id,))
+    user = c.fetchone()
+
+    c.execute("SELECT COUNT(*) as cnt FROM referrals WHERE referrer_id = ?", (user_id,))
+    count = c.fetchone()["cnt"]
+
+    conn.close()
+    return {
+        "referral_code": user["referral_code"] if user else None,
+        "bonus_mocks": user["bonus_mocks"] if user else 0,
+        "referral_count": count,
+    }
+
+
+def use_bonus_mock(user_id):
+    """Use one bonus mock. Returns True if bonus was used."""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT COALESCE(bonus_mocks, 0) as bonus FROM users WHERE user_id = ?", (user_id,))
+    row = c.fetchone()
+    if row and row["bonus"] > 0:
+        c.execute("UPDATE users SET bonus_mocks = bonus_mocks - 1 WHERE user_id = ?", (user_id,))
+        conn.commit()
+        conn.close()
+        return True
+    conn.close()
+    return False

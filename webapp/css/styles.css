@@ -1441,3 +1441,447 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
 .dark .cefr-badge.below-b1 {
     background: #3D1A1A;
 }
+
+/* ─── Playback Controls ─────────────────────────────────────── */
+.playback-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.play-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: white;
+    border: none;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background var(--transition);
+}
+
+.play-btn:active {
+    background: var(--primary-light);
+}
+
+.playback-bar {
+    flex: 1;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.playback-progress {
+    height: 100%;
+    background: var(--primary);
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.1s linear;
+}
+
+/* ─── Timer Warning ──────────────────────────────────────────── */
+.timer-limit {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--text-secondary);
+}
+
+.timer-warning {
+    color: var(--accent-red) !important;
+    animation: timer-pulse 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes timer-pulse {
+    0% { opacity: 1; transform: scale(1); }
+    100% { opacity: 0.6; transform: scale(1.05); }
+}
+
+/* ─── Leaderboard ────────────────────────────────────────────── */
+.lb-my-rank {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-light));
+    color: white;
+    padding: 16px;
+}
+
+.lb-my-rank .lb-rank {
+    font-size: 20px;
+    font-weight: 800;
+    min-width: 40px;
+    text-align: center;
+}
+
+.lb-my-rank .lb-name {
+    color: white;
+    font-weight: 600;
+}
+
+.lb-my-rank .lb-sessions {
+    color: rgba(255,255,255,0.8);
+}
+
+.lb-my-rank .lb-score {
+    margin-left: auto;
+    font-size: 24px;
+    font-weight: 800;
+}
+
+.lb-list {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+}
+
+.leaderboard-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.leaderboard-row:last-child {
+    border-bottom: none;
+}
+
+.leaderboard-row.is-me {
+    background: var(--primary-bg);
+}
+
+.leaderboard-row .lb-rank {
+    font-size: 16px;
+    font-weight: 700;
+    min-width: 36px;
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+.leaderboard-row .lb-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.leaderboard-row .lb-name {
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.leaderboard-row .lb-sessions {
+    color: var(--text-secondary);
+}
+
+.leaderboard-row .lb-score {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--primary);
+}
+
+/* ─── Vocabulary Bank ────────────────────────────────────────── */
+.vocab-category {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: var(--shadow);
+    margin-bottom: 12px;
+}
+
+.vocab-category h3 {
+    margin-bottom: 4px;
+}
+
+.vocab-item {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.vocab-item:last-child {
+    border-bottom: none;
+}
+
+.vocab-phrase {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--primary);
+    margin-bottom: 2px;
+}
+
+.vocab-example {
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-style: italic;
+    line-height: 1.4;
+}
+
+/* ─── Pronunciation Drill ────────────────────────────────────── */
+.drill-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.drill-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    transition: transform var(--transition);
+}
+
+.drill-item:active {
+    transform: scale(0.98);
+}
+
+.drill-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+}
+
+.drill-info h3 {
+    margin-bottom: 2px;
+}
+
+.drill-target-card {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 24px;
+    box-shadow: var(--shadow);
+    margin-bottom: 16px;
+    text-align: center;
+}
+
+.drill-word {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--primary);
+}
+
+.drill-phonetic {
+    font-size: 16px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    font-family: monospace;
+}
+
+.drill-tip {
+    line-height: 1.4;
+}
+
+/* Pronunciation Result */
+.pron-result-card {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow);
+    margin-bottom: 12px;
+    text-align: center;
+    border-left: 4px solid var(--border);
+}
+
+.pron-result-card.score-great {
+    border-left-color: var(--accent-green);
+}
+
+.pron-result-card.score-ok {
+    border-left-color: var(--accent-orange);
+}
+
+.pron-result-card.score-low {
+    border-left-color: var(--accent-red);
+}
+
+.pron-score {
+    font-size: 48px;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 8px;
+}
+
+.score-great .pron-score { color: var(--accent-green); }
+.score-ok .pron-score { color: var(--accent-orange); }
+.score-low .pron-score { color: var(--accent-red); }
+
+.pron-target {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.pron-heard {
+    font-size: 14px;
+    color: var(--text);
+    font-weight: 600;
+}
+
+.pron-feedback {
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+/* ─── Admin Panel ────────────────────────────────────────────── */
+.admin-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.admin-stat-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    text-align: center;
+    box-shadow: var(--shadow);
+}
+
+.admin-stat-card .stat-value {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--primary);
+}
+
+.admin-stat-card .stat-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.search-wrapper {
+    margin-bottom: 12px;
+}
+
+.search-input {
+    width: 100%;
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    border: 2px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text);
+    font-size: 15px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color var(--transition);
+}
+
+.search-input:focus {
+    border-color: var(--primary);
+}
+
+.admin-user-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--bg-card);
+    border-radius: var(--radius-sm);
+    margin-bottom: 8px;
+    box-shadow: var(--shadow);
+}
+
+.admin-user-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.admin-user-name {
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tariff-select {
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 2px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: border-color var(--transition);
+}
+
+/* ─── Referral Section ───────────────────────────────────────── */
+.referral-section h3 {
+    margin-bottom: 4px;
+}
+
+.referral-code-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.referral-code {
+    flex: 1;
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: var(--primary);
+    background: var(--primary-bg);
+    padding: 10px 16px;
+    border-radius: var(--radius-sm);
+    text-align: center;
+    font-family: monospace;
+}
+
+.btn-copy {
+    padding: 10px 16px;
+    border-radius: var(--radius-sm);
+    background: var(--primary);
+    color: white;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    white-space: nowrap;
+}
+
+.referral-stats {
+    display: flex;
+    gap: 10px;
+}
+
+.referral-stat {
+    flex: 1;
+    text-align: center;
+    padding: 10px;
+    background: var(--bg);
+    border-radius: var(--radius-sm);
+}
+
+.referral-stat .stat-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.referral-stat .stat-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+}

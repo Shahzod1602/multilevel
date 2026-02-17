@@ -1,5 +1,5 @@
 /**
- * Mock Test page — full 4-part speaking test simulation.
+ * Mock Test page — full 4-part speaking test simulation with playback + auto-stop timer.
  */
 const MockTestPage = {
     sessionId: null,
@@ -16,6 +16,9 @@ const MockTestPage = {
     autoAdvanceTimer: null,
     currentAudio: null,
     debateSide: null,
+    lastBlobUrl: null,
+
+    TIME_LIMITS: { '1.1': 30, '1.2': 30, '2': 60, '3': 120 },
 
     get currentPart() {
         return this.parts[this.currentPartIndex];
@@ -27,6 +30,13 @@ const MockTestPage = {
 
     get currentQuestions() {
         return this.currentPartData.questions || [];
+    },
+
+    cleanupAudio() {
+        if (this.lastBlobUrl) {
+            URL.revokeObjectURL(this.lastBlobUrl);
+            this.lastBlobUrl = null;
+        }
     },
 
     async render(container) {
@@ -41,6 +51,7 @@ const MockTestPage = {
         this.debateSide = null;
         this.test = null;
         this.clearAutoAdvance();
+        this.cleanupAudio();
 
         container.innerHTML = `<div class="loading"><div class="spinner"></div><span>Preparing mock test...</span></div>`;
 
@@ -211,6 +222,7 @@ const MockTestPage = {
 
     renderQuestion(container) {
         this.clearAutoAdvance();
+        this.cleanupAudio();
         const part = this.currentPart;
         const questions = this.currentQuestions;
 
@@ -239,6 +251,7 @@ const MockTestPage = {
 
         const q = questions[this.currentIndex];
         const totalQ = questions.length;
+        const maxDur = this.TIME_LIMITS[part] || 30;
 
         // Part 1.2: show images
         const imagesHtml = (part === "1.2" && this.currentPartData.images)
@@ -272,7 +285,7 @@ const MockTestPage = {
                         <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
                     </svg>
                 </button>
-                <div class="timer" id="timer">0:00</div>
+                <div class="timer" id="timer">0:00 <span class="timer-limit">/ ${Recorder.formatTime(maxDur)}</span></div>
                 <p class="text-sm text-secondary mt-8" id="record-hint">Tap to start recording</p>
             </div>
 
@@ -341,7 +354,9 @@ const MockTestPage = {
     },
 
     renderDebateRecording(container) {
+        this.cleanupAudio();
         const partData = this.currentPartData;
+        const maxDur = this.TIME_LIMITS['3'];
 
         container.innerHTML = `
             <div class="page-header">
@@ -353,7 +368,7 @@ const MockTestPage = {
             <div class="card text-center">
                 <span class="part-badge">Arguing ${this.debateSide === 'for' ? 'FOR' : 'AGAINST'}</span>
                 <p class="question-text mt-12">${partData.topic}</p>
-                <p class="text-sm text-secondary mt-8">You have 120 seconds to argue your position.</p>
+                <p class="text-sm text-secondary mt-8">You have ${maxDur} seconds to argue your position.</p>
             </div>
 
             <div class="recorder-area" id="recorder-area">
@@ -363,7 +378,7 @@ const MockTestPage = {
                         <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
                     </svg>
                 </button>
-                <div class="timer" id="timer">0:00</div>
+                <div class="timer" id="timer">0:00 <span class="timer-limit">/ ${Recorder.formatTime(maxDur)}</span></div>
                 <p class="text-sm text-secondary mt-8" id="record-hint">Tap to start recording</p>
             </div>
 
@@ -450,6 +465,8 @@ const MockTestPage = {
         const btn = container.querySelector('#record-btn');
         const timer = container.querySelector('#timer');
         const hint = container.querySelector('#record-hint');
+        const part = this.currentPart;
+        const maxDur = this.TIME_LIMITS[part] || 30;
 
         btn.addEventListener('click', async () => {
             if (this.state === 'recording') {
@@ -462,6 +479,7 @@ const MockTestPage = {
                 this.state = 'processing';
                 btn.classList.remove('recording');
                 btn.classList.add('disabled');
+                timer.classList.remove('timer-warning');
                 hint.textContent = 'Processing...';
                 return;
             }
@@ -469,14 +487,25 @@ const MockTestPage = {
 
             const started = await Recorder.start(
                 (s) => {
-                    timer.textContent = Recorder.formatTime(s);
+                    timer.innerHTML = `${Recorder.formatTime(s)} <span class="timer-limit">/ ${Recorder.formatTime(maxDur)}</span>`;
                     if (s < 5) {
                         hint.textContent = `Recording... (min ${5 - s}s)`;
                     } else {
                         hint.textContent = 'Tap to stop';
                     }
+                    // Warning in last 5 seconds
+                    if (maxDur - s <= 5 && maxDur - s > 0) {
+                        timer.classList.add('timer-warning');
+                    }
+                    if (s >= maxDur) {
+                        timer.classList.remove('timer-warning');
+                    }
                 },
-                (blob) => { this.handleRecording(blob, container); }
+                (blob) => {
+                    timer.classList.remove('timer-warning');
+                    this.handleRecording(blob, container);
+                },
+                maxDur
             );
 
             if (started) {
@@ -501,6 +530,10 @@ const MockTestPage = {
         const btn = container.querySelector('#record-btn');
         const part = this.currentPart;
         const isDebate = (part === "3");
+
+        // Save blob URL for playback
+        this.cleanupAudio();
+        this.lastBlobUrl = URL.createObjectURL(blob);
 
         transcriptionArea.innerHTML = `<div class="loading"><div class="spinner"></div><span>${this.showTranscription ? 'Transcribing...' : 'Saving response...'}</span></div>`;
 
@@ -537,8 +570,14 @@ const MockTestPage = {
                         <h3>Your Response</h3>
                         <p class="text">${result.transcription}</p>
                         <p class="wpm-stats mt-8">${words} words · ${wpm} WPM · ${result.duration}s</p>
+                        ${this.lastBlobUrl ? `
+                        <div class="playback-row mt-8">
+                            <button class="play-btn" id="play-btn">&#9654;</button>
+                            <div class="playback-bar"><div class="playback-progress" id="playback-progress"></div></div>
+                        </div>` : ''}
                     </div>
                 `;
+                if (this.lastBlobUrl) this.setupPlayback(container);
             } else {
                 transcriptionArea.innerHTML = `
                     <div class="card text-center">
@@ -567,6 +606,40 @@ const MockTestPage = {
             btn.classList.remove('disabled');
             hint.textContent = 'Tap to try again';
         }
+    },
+
+    setupPlayback(container) {
+        const playBtn = container.querySelector('#play-btn');
+        const progressBar = container.querySelector('#playback-progress');
+        if (!playBtn || !this.lastBlobUrl) return;
+
+        const audio = new Audio(this.lastBlobUrl);
+        let isPlaying = false;
+
+        audio.addEventListener('timeupdate', () => {
+            if (audio.duration) {
+                const pct = (audio.currentTime / audio.duration) * 100;
+                progressBar.style.width = pct + '%';
+            }
+        });
+
+        audio.addEventListener('ended', () => {
+            isPlaying = false;
+            playBtn.innerHTML = '&#9654;';
+            progressBar.style.width = '0%';
+        });
+
+        playBtn.addEventListener('click', () => {
+            if (isPlaying) {
+                audio.pause();
+                isPlaying = false;
+                playBtn.innerHTML = '&#9654;';
+            } else {
+                audio.play().catch(() => {});
+                isPlaying = true;
+                playBtn.innerHTML = '&#9646;&#9646;';
+            }
+        });
     },
 
     showNextWithAutoAdvance(actionArea, container) {
@@ -652,6 +725,7 @@ const MockTestPage = {
 
     async showResults(container) {
         this.clearAutoAdvance();
+        this.cleanupAudio();
         container.innerHTML = `<div class="loading"><div class="spinner"></div><span>Generating feedback...</span></div>`;
 
         try {

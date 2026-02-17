@@ -1,5 +1,6 @@
 /**
  * Audio recorder using MediaRecorder API.
+ * Supports maxDuration for auto-stop.
  */
 const Recorder = {
     mediaRecorder: null,
@@ -9,11 +10,13 @@ const Recorder = {
     timerInterval: null,
     onTick: null,
     onStop: null,
+    maxDuration: null,
     mimeType: '',
 
-    async start(onTick, onStop) {
+    async start(onTick, onStop, maxDuration) {
         this.onTick = onTick;
         this.onStop = onStop;
+        this.maxDuration = maxDuration || null;
         this.chunks = [];
 
         try {
@@ -61,6 +64,11 @@ const Recorder = {
             this.timerInterval = setInterval(() => {
                 const elapsed = Math.floor((Date.now() - this.startTime) / 1000);
                 if (this.onTick) this.onTick(elapsed);
+
+                // Auto-stop when maxDuration reached
+                if (this.maxDuration && elapsed >= this.maxDuration) {
+                    this.stop();
+                }
             }, 1000);
 
             return true;
@@ -89,6 +97,11 @@ const Recorder = {
 
     isRecording() {
         return this.mediaRecorder && this.mediaRecorder.state === 'recording';
+    },
+
+    getElapsed() {
+        if (!this.startTime) return 0;
+        return Math.floor((Date.now() - this.startTime) / 1000);
     },
 
     formatTime(seconds) {

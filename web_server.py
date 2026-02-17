@@ -242,10 +242,13 @@ async def session_info(user=Depends(get_current_user)):
     is_premium = tariff != "free"
     mock_count = db.get_daily_mock_count(user["user_id"])
     mock_limit = MOCK_LIMIT_PREMIUM if is_premium else MOCK_LIMIT_FREE
+    referral_stats = db.get_referral_stats(user["user_id"])
+    bonus_mocks = referral_stats.get("bonus_mocks", 0)
     return {
         "mock_today": mock_count,
         "mock_limit": mock_limit,
-        "mock_remaining": max(0, mock_limit - mock_count),
+        "mock_remaining": max(0, mock_limit - mock_count) + bonus_mocks,
+        "bonus_mocks": bonus_mocks,
         "is_premium": is_premium,
         "tariff": tariff,
     }
@@ -273,10 +276,13 @@ async def start_session(body: SessionStart, user=Depends(get_current_user)):
         is_premium = user.get("tariff", "free") != "free"
         limit = MOCK_LIMIT_PREMIUM if is_premium else MOCK_LIMIT_FREE
         if mock_count >= limit:
-            if is_premium:
-                raise HTTPException(403, f"Daily mock limit reached ({MOCK_LIMIT_PREMIUM}/day).")
-            else:
-                raise HTTPException(403, f"Daily mock limit reached ({MOCK_LIMIT_FREE}/day). Upgrade to Premium for {MOCK_LIMIT_PREMIUM} mocks per day!")
+            # Check for bonus mocks
+            bonus_used = db.use_bonus_mock(user["user_id"])
+            if not bonus_used:
+                if is_premium:
+                    raise HTTPException(403, f"Daily mock limit reached ({MOCK_LIMIT_PREMIUM}/day).")
+                else:
+                    raise HTTPException(403, f"Daily mock limit reached ({MOCK_LIMIT_FREE}/day). Upgrade to Premium for {MOCK_LIMIT_PREMIUM} mocks per day!")
 
     session_id = db.create_session(user["user_id"], body.type, body.part)
 
@@ -643,6 +649,276 @@ async def study_streak(user=Depends(get_current_user)):
         "target_level": settings.get("target_level", "B2"),
         "cefr_level": cefr_level,
     }
+
+
+# ─── Leaderboard ─────────────────────────────────────────────
+
+@app.get("/api/leaderboard")
+async def leaderboard(user=Depends(get_current_user)):
+    lb = db.get_leaderboard(limit=20, min_sessions=3)
+    user_id = user["user_id"]
+    rank_data = db.get_user_rank(user_id, min_sessions=3)
+
+    # Mark if user is in list
+    for item in lb:
+        item["is_me"] = item["user_id"] == user_id
+
+    return {
+        "leaderboard": lb,
+        "my_rank": rank_data["rank"] if rank_data else None,
+        "my_avg_score": rank_data["avg_score"] if rank_data else None,
+        "my_sessions": rank_data["sessions"] if rank_data else 0,
+    }
+
+
+# ─── Vocabulary ──────────────────────────────────────────────
+
+@app.get("/api/content/vocabulary")
+async def get_vocabulary(user=Depends(get_current_user)):
+    return {
+        "categories": [
+            {
+                "title": "Part 1.1 — Interview Phrases",
+                "description": "Natural expressions for personal questions",
+                "items": [
+                    {"phrase": "To be honest...", "example": "To be honest, I'm not really a morning person."},
+                    {"phrase": "I'd say that...", "example": "I'd say that my favourite hobby is reading."},
+                    {"phrase": "It depends on...", "example": "It depends on the situation, but usually I prefer..."},
+                    {"phrase": "I'm quite keen on...", "example": "I'm quite keen on photography these days."},
+                    {"phrase": "As far as I know...", "example": "As far as I know, it's the most popular sport in my country."},
+                    {"phrase": "I tend to...", "example": "I tend to go for walks in the evening rather than the morning."},
+                ]
+            },
+            {
+                "title": "Part 1.2 — Describing Pictures",
+                "description": "Useful language for picture description and comparison",
+                "items": [
+                    {"phrase": "In the foreground/background...", "example": "In the foreground, I can see a group of people having lunch."},
+                    {"phrase": "It appears that...", "example": "It appears that they are enjoying a family gathering."},
+                    {"phrase": "The main difference is...", "example": "The main difference between the two pictures is the setting."},
+                    {"phrase": "While the first picture shows...", "example": "While the first picture shows an indoor scene, the second is outdoors."},
+                    {"phrase": "I would personally prefer...", "example": "I would personally prefer the situation in the second picture."},
+                    {"phrase": "What strikes me is...", "example": "What strikes me is how relaxed everyone looks."},
+                ]
+            },
+            {
+                "title": "Part 2 — Discussion Phrases",
+                "description": "Extended response language for deeper discussions",
+                "items": [
+                    {"phrase": "From my perspective...", "example": "From my perspective, education is the key to success."},
+                    {"phrase": "There are several reasons for this...", "example": "There are several reasons for this, the main one being..."},
+                    {"phrase": "On the other hand...", "example": "On the other hand, some people might argue that..."},
+                    {"phrase": "For instance...", "example": "For instance, in my country, most students prefer..."},
+                    {"phrase": "This is largely because...", "example": "This is largely because of the influence of social media."},
+                    {"phrase": "It's worth mentioning that...", "example": "It's worth mentioning that technology has changed this."},
+                ]
+            },
+            {
+                "title": "Part 3 — Debate Phrases",
+                "description": "Persuasive language for arguing your position",
+                "items": [
+                    {"phrase": "I firmly believe that...", "example": "I firmly believe that education should be free for everyone."},
+                    {"phrase": "The evidence suggests...", "example": "The evidence suggests that banning phones improves focus."},
+                    {"phrase": "One could argue that...", "example": "One could argue that this approach is too extreme."},
+                    {"phrase": "Furthermore...", "example": "Furthermore, studies have shown that regular exercise..."},
+                    {"phrase": "In conclusion...", "example": "In conclusion, the benefits clearly outweigh the drawbacks."},
+                    {"phrase": "A compelling argument is...", "example": "A compelling argument is that it promotes equality."},
+                ]
+            }
+        ]
+    }
+
+
+# ─── Pronunciation Drills ────────────────────────────────────
+
+@app.get("/api/content/pronunciation-drills")
+async def get_pronunciation_drills(user=Depends(get_current_user)):
+    return {
+        "drills": [
+            {
+                "title": "Difficult Sounds",
+                "items": [
+                    {"word": "think", "phonetic": "/θɪŋk/", "tip": "Place tongue between teeth and blow air"},
+                    {"word": "this", "phonetic": "/ðɪs/", "tip": "Tongue between teeth, add voice"},
+                    {"word": "right", "phonetic": "/raɪt/", "tip": "Curl tongue back, don't touch the roof"},
+                    {"word": "world", "phonetic": "/wɜːrld/", "tip": "Round lips for /w/, then curl for /r/"},
+                    {"word": "very", "phonetic": "/ˈveri/", "tip": "Upper teeth on lower lip, voice it"},
+                    {"word": "comfortable", "phonetic": "/ˈkʌmftəbl/", "tip": "Three syllables: KUMF-tuh-bl"},
+                    {"word": "February", "phonetic": "/ˈfebrueri/", "tip": "Don't skip the first R: FEB-roo-eri"},
+                    {"word": "particularly", "phonetic": "/pəˈtɪkjʊləli/", "tip": "par-TIK-yoo-luh-lee"},
+                ]
+            },
+            {
+                "title": "Common Phrases",
+                "items": [
+                    {"word": "as a matter of fact", "phonetic": "", "tip": "Link words smoothly: az-uh-matter-uv-fact"},
+                    {"word": "in my opinion", "phonetic": "", "tip": "Natural stress on 'pin': in-my-uh-PIN-yun"},
+                    {"word": "on the other hand", "phonetic": "", "tip": "Link 'the other': on-thee-OTHER-hand"},
+                    {"word": "I couldn't agree more", "phonetic": "", "tip": "COULD-nt with a soft T"},
+                    {"word": "it goes without saying", "phonetic": "", "tip": "Smooth linking: it-GOES-without-SAY-ing"},
+                    {"word": "to a certain extent", "phonetic": "", "tip": "SER-tin, not cer-TAIN"},
+                ]
+            },
+            {
+                "title": "Minimal Pairs",
+                "items": [
+                    {"word": "ship vs sheep", "phonetic": "/ʃɪp/ vs /ʃiːp/", "tip": "Short /ɪ/ vs long /iː/"},
+                    {"word": "bat vs bet", "phonetic": "/bæt/ vs /bet/", "tip": "Open /æ/ vs mid /e/"},
+                    {"word": "light vs right", "phonetic": "/laɪt/ vs /raɪt/", "tip": "/l/ tongue touches roof, /r/ doesn't"},
+                    {"word": "vest vs west", "phonetic": "/vest/ vs /west/", "tip": "/v/ teeth on lip, /w/ round lips"},
+                    {"word": "sink vs think", "phonetic": "/sɪŋk/ vs /θɪŋk/", "tip": "/s/ behind teeth, /θ/ between teeth"},
+                    {"word": "fan vs van", "phonetic": "/fæn/ vs /væn/", "tip": "/f/ is voiceless, /v/ is voiced"},
+                ]
+            }
+        ]
+    }
+
+
+@app.post("/api/pronunciation/check")
+async def check_pronunciation(
+    audio: UploadFile = File(...),
+    target: str = Form(""),
+    user=Depends(get_current_user),
+):
+    """Transcribe audio and compare with target word/phrase."""
+    audio_data = await audio.read()
+    if len(audio_data) < 500:
+        raise HTTPException(400, "Audio too short")
+
+    ct = (audio.content_type or "").lower()
+    ext_map = {
+        "audio/webm": ".webm", "audio/ogg": ".ogg",
+        "audio/mp4": ".m4a", "audio/mpeg": ".mp3",
+        "audio/wav": ".wav",
+    }
+    ext = ext_map.get(ct.split(";")[0], ".ogg")
+
+    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+        tmp.write(audio_data)
+        tmp.flush()
+        audio_path = tmp.name
+
+    wav_path = audio_path + ".wav"
+
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", audio_path, "-ar", "16000", "-ac", "1", wav_path],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        use_path = wav_path if os.path.exists(wav_path) else audio_path
+
+        from groq import Groq
+        groq_client = Groq(api_key=GROQ_KEY)
+
+        with open(use_path, "rb") as f:
+            result = groq_client.audio.transcriptions.create(
+                file=(use_path, f.read()),
+                model="whisper-large-v3-turbo",
+                language="en",
+                prompt=f"Pronunciation practice: {target}",
+            )
+        transcription = result.text.strip()
+
+        # Simple similarity scoring
+        target_clean = target.lower().strip().replace("vs ", "").replace("vs. ", "")
+        heard_clean = transcription.lower().strip()
+
+        # Calculate word-level match
+        target_words = set(target_clean.split())
+        heard_words = set(heard_clean.split())
+
+        if target_words:
+            matches = len(target_words & heard_words)
+            score = min(100, int((matches / len(target_words)) * 100))
+        else:
+            score = 50 if transcription else 0
+
+        # Boost score if close match
+        if heard_clean == target_clean:
+            score = 100
+        elif target_clean in heard_clean or heard_clean in target_clean:
+            score = max(score, 80)
+
+        feedback = ""
+        if score >= 90:
+            feedback = "Excellent pronunciation!"
+        elif score >= 70:
+            feedback = "Good job! Minor differences detected."
+        elif score >= 50:
+            feedback = "Keep practicing. Try to match the target more closely."
+        else:
+            feedback = "Try listening again and repeat more slowly."
+
+        return {
+            "transcription": transcription,
+            "score": score,
+            "feedback": feedback,
+        }
+    finally:
+        for f in [audio_path, wav_path]:
+            try:
+                os.remove(f)
+            except OSError:
+                pass
+
+
+# ─── Admin Panel ─────────────────────────────────────────────
+
+async def get_admin_user(request: Request) -> dict:
+    """Dependency: validate user is admin."""
+    user = await get_current_user(request)
+    if not db.is_admin(user["user_id"]):
+        raise HTTPException(403, "Admin access required")
+    return user
+
+
+@app.get("/api/admin/stats")
+async def admin_stats(user=Depends(get_admin_user)):
+    return db.get_admin_stats()
+
+
+@app.get("/api/admin/users")
+async def admin_users(q: str = "", user=Depends(get_admin_user)):
+    if not q:
+        users = db.search_users("", limit=20)
+    else:
+        users = db.search_users(q, limit=20)
+    return {"users": users}
+
+
+class TariffUpdate(BaseModel):
+    tariff: str = "free"
+
+@app.put("/api/admin/users/{target_id}/tariff")
+async def admin_update_tariff(target_id: int, body: TariffUpdate, user=Depends(get_admin_user)):
+    if body.tariff not in ("free", "gold"):
+        raise HTTPException(400, "Invalid tariff")
+    db.update_user_tariff(target_id, body.tariff)
+    return {"success": True, "user_id": target_id, "tariff": body.tariff}
+
+
+# ─── Referral System ─────────────────────────────────────────
+
+@app.get("/api/referral")
+async def get_referral(user=Depends(get_current_user)):
+    code = db.generate_referral_code(user["user_id"])
+    stats = db.get_referral_stats(user["user_id"])
+    return {
+        "code": code,
+        "referral_count": stats["referral_count"],
+        "bonus_mocks": stats["bonus_mocks"],
+    }
+
+
+class ReferralApply(BaseModel):
+    code: str
+
+@app.post("/api/referral/apply")
+async def apply_referral(body: ReferralApply, user=Depends(get_current_user)):
+    result = db.process_referral(user["user_id"], body.code.strip().upper())
+    if "error" in result:
+        raise HTTPException(400, result["error"])
+    return {"success": True, "message": "Referral applied! You got +1 bonus mock test."}
 
 
 @app.get("/api/content/tips")

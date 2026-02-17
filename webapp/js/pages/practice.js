@@ -1,5 +1,5 @@
 /**
- * Practice page — single-part practice with recording, transcription, results.
+ * Practice page — single-part practice with recording, transcription, playback, results.
  */
 const PracticePage = {
     sessionId: null,
@@ -11,6 +11,9 @@ const PracticePage = {
     responses: [],
     state: 'idle',
     debateSide: null,
+    lastBlobUrl: null,
+
+    TIME_LIMITS: { '1.1': 30, '1.2': 30, '2': 60, '3': 120 },
 
     async render(container, params = {}) {
         this.part = params.part || '1.1';
@@ -21,8 +24,16 @@ const PracticePage = {
         this.images = [];
         this.partData = null;
         this.debateSide = null;
+        this.cleanupAudio();
 
         await this.startSession(container);
+    },
+
+    cleanupAudio() {
+        if (this.lastBlobUrl) {
+            URL.revokeObjectURL(this.lastBlobUrl);
+            this.lastBlobUrl = null;
+        }
     },
 
     async startSession(container) {
@@ -74,8 +85,10 @@ const PracticePage = {
     },
 
     renderQuestion(container) {
+        this.cleanupAudio();
         const q = this.questions[this.currentIndex];
         const progress = `${this.currentIndex + 1} / ${this.questions.length}`;
+        const maxDur = this.TIME_LIMITS[this.part] || 30;
 
         // Part 1.2: show images
         const imagesHtml = (this.part === "1.2" && this.images.length)
@@ -108,7 +121,7 @@ const PracticePage = {
                         <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
                     </svg>
                 </button>
-                <div class="timer" id="timer">0:00</div>
+                <div class="timer" id="timer">0:00 <span class="timer-limit">/ ${Recorder.formatTime(maxDur)}</span></div>
                 <p class="text-sm text-secondary mt-8" id="record-hint">Tap to start recording</p>
             </div>
 
@@ -167,7 +180,9 @@ const PracticePage = {
     },
 
     renderDebateRecording(container) {
+        this.cleanupAudio();
         const pd = this.partData;
+        const maxDur = this.TIME_LIMITS['3'];
 
         container.innerHTML = `
             <div class="page-header">
@@ -178,7 +193,7 @@ const PracticePage = {
             <div class="card text-center">
                 <span class="part-badge">Arguing ${this.debateSide === 'for' ? 'FOR' : 'AGAINST'}</span>
                 <p class="question-text mt-12">${pd.topic}</p>
-                <p class="text-sm text-secondary mt-8">You have 120 seconds to argue your position.</p>
+                <p class="text-sm text-secondary mt-8">You have ${maxDur} seconds to argue your position.</p>
             </div>
 
             <div class="recorder-area" id="recorder-area">
@@ -188,7 +203,7 @@ const PracticePage = {
                         <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
                     </svg>
                 </button>
-                <div class="timer" id="timer">0:00</div>
+                <div class="timer" id="timer">0:00 <span class="timer-limit">/ ${Recorder.formatTime(maxDur)}</span></div>
                 <p class="text-sm text-secondary mt-8" id="record-hint">Tap to start recording</p>
             </div>
 
@@ -208,6 +223,7 @@ const PracticePage = {
         const btn = container.querySelector('#record-btn');
         const timer = container.querySelector('#timer');
         const hint = container.querySelector('#record-hint');
+        const maxDur = this.TIME_LIMITS[this.part] || 30;
 
         btn.addEventListener('click', async () => {
             if (this.state === 'recording') {
@@ -215,6 +231,7 @@ const PracticePage = {
                 this.state = 'processing';
                 btn.classList.remove('recording');
                 btn.classList.add('disabled');
+                timer.classList.remove('timer-warning');
                 hint.textContent = 'Processing...';
                 return;
             }
@@ -223,11 +240,20 @@ const PracticePage = {
 
             const started = await Recorder.start(
                 (seconds) => {
-                    timer.textContent = Recorder.formatTime(seconds);
+                    timer.innerHTML = `${Recorder.formatTime(seconds)} <span class="timer-limit">/ ${Recorder.formatTime(maxDur)}</span>`;
+                    // Warning in last 5 seconds
+                    if (maxDur - seconds <= 5 && maxDur - seconds > 0) {
+                        timer.classList.add('timer-warning');
+                    }
+                    if (seconds >= maxDur) {
+                        timer.classList.remove('timer-warning');
+                    }
                 },
                 (blob) => {
+                    timer.classList.remove('timer-warning');
                     this.handleRecording(blob, container);
-                }
+                },
+                maxDur
             );
 
             if (started) {
@@ -246,6 +272,10 @@ const PracticePage = {
         const hint = container.querySelector('#record-hint');
         const btn = container.querySelector('#record-btn');
         const isDebate = (this.part === "3");
+
+        // Save blob URL for playback
+        this.cleanupAudio();
+        this.lastBlobUrl = URL.createObjectURL(blob);
 
         transcriptionArea.innerHTML = `<div class="loading"><div class="spinner"></div><span>Transcribing...</span></div>`;
 
@@ -280,8 +310,18 @@ const PracticePage = {
                     <h3>Your Response</h3>
                     <p class="text">${result.transcription}</p>
                     <p class="wpm-stats mt-8">${words} words · ${wpm} WPM · ${result.duration}s</p>
+                    ${this.lastBlobUrl ? `
+                    <div class="playback-row mt-8">
+                        <button class="play-btn" id="play-btn">&#9654;</button>
+                        <div class="playback-bar"><div class="playback-progress" id="playback-progress"></div></div>
+                    </div>` : ''}
                 </div>
             `;
+
+            // Setup playback
+            if (this.lastBlobUrl) {
+                this.setupPlayback(container);
+            }
 
             if (isDebate) {
                 // Debate done — go to results
@@ -356,6 +396,40 @@ const PracticePage = {
         }
     },
 
+    setupPlayback(container) {
+        const playBtn = container.querySelector('#play-btn');
+        const progressBar = container.querySelector('#playback-progress');
+        if (!playBtn || !this.lastBlobUrl) return;
+
+        const audio = new Audio(this.lastBlobUrl);
+        let isPlaying = false;
+
+        audio.addEventListener('timeupdate', () => {
+            if (audio.duration) {
+                const pct = (audio.currentTime / audio.duration) * 100;
+                progressBar.style.width = pct + '%';
+            }
+        });
+
+        audio.addEventListener('ended', () => {
+            isPlaying = false;
+            playBtn.innerHTML = '&#9654;';
+            progressBar.style.width = '0%';
+        });
+
+        playBtn.addEventListener('click', () => {
+            if (isPlaying) {
+                audio.pause();
+                isPlaying = false;
+                playBtn.innerHTML = '&#9654;';
+            } else {
+                audio.play().catch(() => {});
+                isPlaying = true;
+                playBtn.innerHTML = '&#9646;&#9646;';
+            }
+        });
+    },
+
     cefrBadge(score) {
         if (score == null) return '';
         score = Math.round(score);
@@ -402,6 +476,7 @@ const PracticePage = {
     },
 
     async showResults(container) {
+        this.cleanupAudio();
         container.innerHTML = `<div class="loading"><div class="spinner"></div><span>Generating feedback...</span></div>`;
 
         try {

@@ -213,6 +213,23 @@ async def save_response_to_file(user_id, response_data):
 # Start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
+
+    # Handle referral deep link: /start ref_XXXXXXXX
+    if context.args and len(context.args) > 0:
+        arg = context.args[0]
+        if arg.startswith("ref_"):
+            referral_code = arg[4:].upper()
+            try:
+                import db as db_module
+                result = db_module.process_referral(user_id, referral_code)
+                if result.get("success"):
+                    await update.message.reply_text("🎉 Referral applied! You got +1 bonus mock test.")
+                    logging.info(f"User {user_id} used referral code: {referral_code}")
+                elif result.get("error"):
+                    logging.info(f"User {user_id} referral failed: {result['error']}")
+            except Exception as e:
+                logging.error(f"Referral error for {user_id}: {e}")
+
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute("SELECT contact FROM users WHERE user_id = ?", (user_id,))

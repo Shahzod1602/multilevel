@@ -13,7 +13,7 @@ const HomePage = {
         } catch (e) {}
 
         const limitHtml = sessionInfo
-            ? `<div class="daily-limit-badge">${sessionInfo.mock_remaining}/${sessionInfo.mock_limit} mock tests left today</div>`
+            ? `<div class="daily-limit-badge">${sessionInfo.mock_remaining}/${sessionInfo.mock_limit}${sessionInfo.bonus_mocks ? ` +${sessionInfo.bonus_mocks} bonus` : ''} mock tests left today</div>`
             : '';
 
         container.innerHTML = `
@@ -54,23 +54,33 @@ const HomePage = {
                     <h3>Mock Test</h3>
                     <p>Full speaking test</p>
                 </div>
-                <div class="feature-card" data-action="tips">
-                    <div class="icon" style="background:#D5F5E3;font-size:20px">&#128161;</div>
-                    <h3>Tips & Strategy</h3>
-                    <p>Expert advice</p>
+                <div class="feature-card" data-action="leaderboard">
+                    <div class="icon" style="background:#D5F5E3;font-size:20px">&#127942;</div>
+                    <h3>Leaderboard</h3>
+                    <p>Top speakers</p>
+                </div>
+                <div class="feature-card" data-action="vocabulary">
+                    <div class="icon" style="background:#DBEAFE;font-size:20px">&#128218;</div>
+                    <h3>Vocabulary</h3>
+                    <p>Useful phrases</p>
                 </div>
                 <div class="feature-card" data-action="pronunciation">
                     <div class="icon" style="background:#FEF3C7;font-size:20px">&#127908;</div>
                     <h3>Pronunciation</h3>
-                    <p>Sound practice</p>
+                    <p>Sound drills</p>
+                </div>
+                <div class="feature-card" data-action="tips">
+                    <div class="icon" style="background:#E8DAEF;font-size:20px">&#128161;</div>
+                    <h3>Tips & Strategy</h3>
+                    <p>Expert advice</p>
                 </div>
                 <div class="feature-card" data-action="scoring">
-                    <div class="icon" style="background:#DBEAFE;font-size:20px">&#127942;</div>
+                    <div class="icon" style="background:#FADBD8;font-size:20px">&#127919;</div>
                     <h3>Scoring Guide</h3>
                     <p>CEFR levels</p>
                 </div>
                 <div class="feature-card" data-action="history">
-                    <div class="icon" style="background:#E8DAEF;font-size:20px">&#128218;</div>
+                    <div class="icon" style="background:#D5F5E3;font-size:20px">&#128203;</div>
                     <h3>History</h3>
                     <p>Past sessions</p>
                 </div>

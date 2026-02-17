@@ -1,5 +1,5 @@
 /**
- * Profile page — user info, support banner, settings, sign out.
+ * Profile page — user info, referral, admin button, settings, sign out.
  */
 const ProfilePage = {
     async render(container) {
@@ -15,6 +15,46 @@ const ProfilePage = {
         const avatarContent = u.photo_url
             ? `<img src="${u.photo_url}" alt="">`
             : (u.first_name ? u.first_name.charAt(0).toUpperCase() : 'U');
+
+        // Check admin status
+        let isAdmin = false;
+        try {
+            await API.get('/api/admin/stats');
+            isAdmin = true;
+        } catch (e) {}
+
+        // Get referral info
+        let referral = null;
+        try {
+            referral = await API.get('/api/referral');
+        } catch (e) {}
+
+        const adminBtn = isAdmin ? `
+            <button class="btn btn-primary mt-12 mb-12" id="admin-btn">Admin Panel</button>
+        ` : '';
+
+        const referralHtml = referral ? `
+            <div class="referral-section mt-16">
+                <h3 class="mb-8">Invite Friends</h3>
+                <div class="card">
+                    <p class="text-sm text-secondary mb-8">Share your code to earn bonus mock tests! Both you and your friend get +1 mock.</p>
+                    <div class="referral-code-row">
+                        <div class="referral-code" id="referral-code">${referral.code || '...'}</div>
+                        <button class="btn-copy" id="copy-btn">Copy</button>
+                    </div>
+                    <div class="referral-stats mt-12">
+                        <div class="referral-stat">
+                            <div class="stat-value">${referral.referral_count || 0}</div>
+                            <div class="stat-label">Friends invited</div>
+                        </div>
+                        <div class="referral-stat">
+                            <div class="stat-value">${referral.bonus_mocks || 0}</div>
+                            <div class="stat-label">Bonus mocks</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        ` : '';
 
         container.innerHTML = `
             <div class="profile-header">
@@ -33,6 +73,10 @@ const ProfilePage = {
                     <div class="stat-label">Practice</div>
                 </div>
             </div>
+
+            ${adminBtn}
+
+            ${referralHtml}
 
             <div class="support-banner" id="support-btn">
                 <h3>Support Us</h3>
@@ -77,6 +121,29 @@ const ProfilePage = {
 
             <button class="btn btn-outline mt-20" id="sign-out-btn">Sign Out</button>
         `;
+
+        // Admin button
+        if (isAdmin) {
+            document.getElementById('admin-btn').addEventListener('click', () => {
+                App.navigate('admin');
+            });
+        }
+
+        // Referral copy
+        const copyBtn = document.getElementById('copy-btn');
+        if (copyBtn && referral?.code) {
+            copyBtn.addEventListener('click', () => {
+                const text = `Join Multilevel Speaking Practice and get a bonus mock test! Use my code: ${referral.code}`;
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(text).then(() => {
+                        copyBtn.textContent = 'Copied!';
+                        setTimeout(() => { copyBtn.textContent = 'Copy'; }, 2000);
+                    });
+                } else if (window.Telegram?.WebApp) {
+                    window.Telegram.WebApp.showAlert('Your referral code: ' + referral.code);
+                }
+            });
+        }
 
         // Dark mode toggle
         document.getElementById('dark-mode-toggle').addEventListener('click', async () => {
