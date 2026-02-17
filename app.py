@@ -39,7 +39,7 @@ if sys.platform == 'win32':
 # Load credentials from .env
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
-CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "@IELTSPEAK_bot")
+CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "@MultilevelSpeaking9")
 WEBAPP_URL = os.getenv("WEBAPP_URL", "")
 
 if not TELEGRAM_TOKEN or not OPENAI_KEY:

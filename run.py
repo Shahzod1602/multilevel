@@ -33,7 +33,7 @@ def run_web_server():
     # Run migrations
     db.migrate()
 
-    port = int(os.getenv("WEB_PORT", "8080"))
+    port = int(os.getenv("WEB_PORT", "8000"))
     logger.info(f"Starting web server on port {port}...")
     uvicorn.run(web_server.app, host="0.0.0.0", port=port, log_level="info")
 

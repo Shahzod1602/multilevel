@@ -7,7 +7,7 @@ services:
     volumes:
       - ./bot.db:/app/bot.db
     ports:
-      - "8080:8080"
+      - "8000:8000"
     networks:
       - web
 
