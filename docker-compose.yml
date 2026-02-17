@@ -9,33 +9,8 @@ services:
     ports:
       - "8000:8000"
     networks:
-      - web
-
-  nginx:
-    image: nginx:alpine
-    container_name: multilevel-nginx
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./certbot/www:/var/www/certbot:ro
-      - ./certbot/conf:/etc/letsencrypt:ro
-    depends_on:
-      - app
-    networks:
-      - web
-
-  certbot:
-    image: certbot/certbot
-    container_name: multilevel-certbot
-    volumes:
-      - ./certbot/www:/var/www/certbot
-      - ./certbot/conf:/etc/letsencrypt
-    networks:
-      - web
+      - ieltspeakapp_web
 
 networks:
-  web:
-    driver: bridge
+  ieltspeakapp_web:
+    external: true
