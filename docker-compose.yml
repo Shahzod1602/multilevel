@@ -1,7 +1,7 @@
 services:
   app:
     build: .
-    container_name: ielts-app
+    container_name: multilevel-app
     restart: unless-stopped
     env_file: .env
     volumes:
@@ -13,7 +13,7 @@ services:
 
   nginx:
     image: nginx:alpine
-    container_name: ielts-nginx
+    container_name: multilevel-nginx
     restart: unless-stopped
     ports:
       - "80:80"
@@ -29,7 +29,7 @@ services:
 
   certbot:
     image: certbot/certbot
-    container_name: ielts-certbot
+    container_name: multilevel-certbot
     volumes:
       - ./certbot/www:/var/www/certbot
       - ./certbot/conf:/etc/letsencrypt

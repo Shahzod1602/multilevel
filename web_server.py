@@ -1,5 +1,5 @@
 """
-FastAPI backend for IELTS Speaking Telegram Mini App.
+FastAPI backend for Multilevel Speaking Practice Telegram Mini App.
 Provides REST API with Telegram initData authentication.
 """
 import os
@@ -23,7 +23,7 @@ import db
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="IELTS Speaking Mini App")
+app = FastAPI(title="Multilevel Speaking Practice")
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 OPENAI_KEY = os.getenv("OPENAI_API_KEY", "")
@@ -36,11 +36,11 @@ EDGE_TTS_VOICES = {
 }
 
 # Load questions
-QUESTIONS = []
+TESTS = []
 try:
     with open("questions.json", "r", encoding="utf-8") as f:
         data = json.load(f)
-        QUESTIONS = data if isinstance(data, list) else data.get("questions", [])
+        TESTS = data.get("tests", [])
 except FileNotFoundError:
     logger.warning("questions.json not found")
 
@@ -132,12 +132,14 @@ class SettingsUpdate(BaseModel):
     language: Optional[str] = None
     daily_goal: Optional[int] = None
     target_score: Optional[float] = None
+    target_level: Optional[str] = None
 
 
 class SessionStart(BaseModel):
     type: str = "practice"
-    part: int = 1
+    part: str = "1.1"
     topic: Optional[str] = None
+    test_id: Optional[int] = None
 
 
 # ─── Debug Endpoint ───────────────────────────────────────────
@@ -202,6 +204,8 @@ async def update_settings(body: SettingsUpdate, user=Depends(get_current_user)):
         updates["daily_goal"] = body.daily_goal
     if body.target_score is not None:
         updates["target_score"] = body.target_score
+    if body.target_level is not None:
+        updates["target_level"] = body.target_level
 
     if updates:
         db.update_user_settings(user["user_id"], **updates)
@@ -210,9 +214,26 @@ async def update_settings(body: SettingsUpdate, user=Depends(get_current_user)):
 
 
 @app.get("/api/questions")
-async def get_questions(part: int = 1, user=Depends(get_current_user)):
-    filtered = [q for q in QUESTIONS if q.get("part") == part]
-    return {"questions": filtered, "total": len(filtered)}
+async def get_questions(part: str = "1.1", test_id: int = None, user=Depends(get_current_user)):
+    if test_id is not None:
+        test = next((t for t in TESTS if t["test_id"] == test_id), None)
+        if not test:
+            return {"questions": [], "total": 0}
+        part_data = test["parts"].get(part, {})
+        return {"questions": part_data.get("questions", []), "part_data": part_data, "total": len(part_data.get("questions", []))}
+    # Return questions from all tests for this part
+    all_questions = []
+    for t in TESTS:
+        part_data = t["parts"].get(part, {})
+        for q in part_data.get("questions", []):
+            all_questions.append(q)
+    return {"questions": all_questions, "total": len(all_questions)}
+
+
+@app.get("/api/tests")
+async def get_tests(user=Depends(get_current_user)):
+    tests_list = [{"test_id": t["test_id"], "name": t["name"]} for t in TESTS]
+    return {"tests": tests_list, "total": len(tests_list)}
 
 
 @app.get("/api/session-info")
@@ -231,9 +252,14 @@ async def session_info(user=Depends(get_current_user)):
 
 
 @app.get("/api/topics")
-async def get_topics(part: int = 1, user=Depends(get_current_user)):
-    filtered = [q for q in QUESTIONS if q.get("part") == part]
-    topics = sorted(set(q.get("topic", "General") for q in filtered))
+async def get_topics(part: str = "1.1", user=Depends(get_current_user)):
+    topics = []
+    for t in TESTS:
+        part_data = t["parts"].get(part, {})
+        if part_data.get("type") == "debate":
+            topics.append(part_data.get("topic", ""))
+        else:
+            topics.append(t["name"])
     return {"topics": topics, "total": len(topics)}
 
 
@@ -242,7 +268,6 @@ MOCK_LIMIT_PREMIUM = 5
 
 @app.post("/api/sessions/start")
 async def start_session(body: SessionStart, user=Depends(get_current_user)):
-    # Check daily mock limit
     if body.type == "mock":
         mock_count = db.get_daily_mock_count(user["user_id"])
         is_premium = user.get("tariff", "free") != "free"
@@ -255,25 +280,41 @@ async def start_session(body: SessionStart, user=Depends(get_current_user)):
 
     session_id = db.create_session(user["user_id"], body.type, body.part)
 
-    # Pick questions for this session
-    part = body.part
-    filtered = [q for q in QUESTIONS if q.get("part") == part]
-    if body.topic:
-        topic_filtered = [q for q in filtered if q.get("topic") == body.topic]
-        if topic_filtered:
-            filtered = topic_filtered
     import random
-    if part == 1:
-        questions = random.sample(filtered, min(4, len(filtered)))
-    elif part == 2:
-        questions = random.sample(filtered, min(1, len(filtered)))
-    else:
-        questions = random.sample(filtered, min(4, len(filtered)))
+    if body.type == "mock" and body.test_id:
+        # Pick specific test
+        test = next((t for t in TESTS if t["test_id"] == body.test_id), None)
+        if test:
+            return {"session_id": session_id, "test": test}
+    elif body.type == "mock":
+        # Pick random test
+        if TESTS:
+            test = random.choice(TESTS)
+            return {"session_id": session_id, "test": test}
 
-    return {
-        "session_id": session_id,
-        "questions": questions,
-    }
+    # Practice mode - pick questions for specific part
+    part = body.part
+    all_questions = []
+    for t in TESTS:
+        part_data = t["parts"].get(part, {})
+        qs = part_data.get("questions", [])
+        all_questions.extend(qs)
+
+    if part == "3":
+        # For debate, pick a random test's debate data
+        if TESTS:
+            test = random.choice(TESTS)
+            return {"session_id": session_id, "part_data": test["parts"].get("3", {})}
+
+    if part == "1.2":
+        # For picture description, pick a random test's 1.2 data (images + questions together)
+        if TESTS:
+            test = random.choice(TESTS)
+            pd = test["parts"].get("1.2", {})
+            return {"session_id": session_id, "questions": pd.get("questions", []), "images": pd.get("images", [])}
+
+    questions = random.sample(all_questions, min(3, len(all_questions))) if all_questions else []
+    return {"session_id": session_id, "questions": questions}
 
 
 @app.post("/api/sessions/{session_id}/respond")
@@ -281,7 +322,8 @@ async def session_respond(
     session_id: int,
     audio: UploadFile = File(...),
     question: str = Form(""),
-    part: int = Form(1),
+    part: str = Form("1.1"),
+    debate_side: str = Form(""),
     user=Depends(get_current_user),
 ):
     session = db.get_session(session_id)
@@ -327,9 +369,9 @@ async def session_respond(
         with open(use_path, "rb") as audio_file:
             transcription_result = groq_client.audio.transcriptions.create(
                 file=(use_path, audio_file.read()),
-                model="whisper-large-v3",
+                model="whisper-large-v3-turbo",
                 language="en",
-                prompt=f"IELTS Speaking Part {part} response to: {question}",
+                prompt=f"Multilevel Speaking Part {part} response to: {question}",
             )
         transcription = transcription_result.text.strip()
 
@@ -380,26 +422,9 @@ async def complete_session(session_id: int, body: CompleteRequest = CompleteRequ
 
     # Level-based scoring instructions
     level_instructions = {
-        "beginner": (
-            "You are scoring a BEGINNER-level English learner (A2-B1). "
-            "Be encouraging and lenient. Focus on what they did well. "
-            "Give scores that reflect their effort — even simple but clear answers deserve 5.0-6.0. "
-            "Only give below 4.0 if the response is mostly unintelligible. "
-            "Provide constructive, simple feedback with easy-to-understand suggestions."
-        ),
-        "intermediate": (
-            "You are scoring an INTERMEDIATE-level English learner (B1-B2). "
-            "Apply standard IELTS scoring criteria fairly. "
-            "Acknowledge strengths while pointing out areas for improvement. "
-            "Most responses at this level should score between 5.0-7.0."
-        ),
-        "advanced": (
-            "You are scoring an ADVANCED-level English learner (C1-C2). "
-            "Be strict and apply rigorous IELTS scoring standards. "
-            "Expect sophisticated vocabulary, complex grammar, natural fluency, and clear pronunciation. "
-            "Deduct for any hesitation, repetition, limited vocabulary, or grammatical errors. "
-            "Only give 7.0+ for truly excellent performance. Provide detailed, critical feedback."
-        ),
+        "beginner": "Be encouraging and lenient. Focus on what the learner did well. Most responses should score 20-40.",
+        "intermediate": "Apply standard scoring criteria fairly. Most responses should score 35-55.",
+        "advanced": "Be strict. Expect sophisticated vocabulary, complex grammar, natural fluency. Only give 55+ for truly excellent performance.",
     }
 
     level = body.level if body.level in level_instructions else "intermediate"
@@ -424,16 +449,18 @@ async def complete_session(session_id: int, body: CompleteRequest = CompleteRequ
     # Build GPT prompt
     mood_section = f"{mood_text}\n\n" if mood_text else ""
     prompt = (
-        f"You are a certified IELTS Speaking examiner.\n"
+        f"You are a certified Multilevel speaking examiner.\n"
         f"{level_text}\n\n"
         f"{mood_section}"
         "Analyze the following responses.\n"
-        "Score each criterion 0-9 (half-points allowed):\n"
+        "Score each criterion on a 0-75 INTEGER scale:\n"
         "1. Fluency and Coherence\n2. Lexical Resource\n"
         "3. Grammatical Range and Accuracy\n4. Pronunciation\n\n"
+        "CEFR mapping: C1(65-75), B2(51-64), B1(38-50), Below B1(0-37)\n\n"
         "Return ONLY valid JSON (no markdown, no code fences) in this format:\n"
-        '{"fluency": 6.5, "lexical": 6.0, "grammar": 5.5, "pronunciation": 6.0, '
-        '"overall": 6.0, "feedback": "Your detailed feedback here.", '
+        '{"fluency": 55, "lexical": 50, "grammar": 48, "pronunciation": 52, '
+        '"overall": 51, "feedback": "Your detailed feedback here.", '
+        '"cefr_level": "B2", '
         '"grammar_corrections": [{"original": "wrong phrase", "corrected": "correct phrase", "explanation": "brief reason"}], '
         '"pronunciation_issues": [{"word": "word", "tip": "pronunciation tip"}]}\n\n'
         "Include up to 5 grammar corrections and up to 3 pronunciation tips.\n\n"
@@ -454,7 +481,7 @@ async def complete_session(session_id: int, body: CompleteRequest = CompleteRequ
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a certified IELTS Speaking examiner. Return only valid JSON."},
+                {"role": "system", "content": "You are a certified Multilevel speaking examiner. Return only valid JSON."},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=800,
@@ -480,16 +507,18 @@ async def complete_session(session_id: int, body: CompleteRequest = CompleteRequ
 
         db.complete_session(session_id, scores, feedback)
 
+        cefr_level = scores_data.get("cefr_level", db.score_to_cefr(scores.get("overall", 0)))
         return {
             "scores": scores,
             "feedback": feedback,
+            "cefr_level": cefr_level,
             "grammar_corrections": grammar_corrections,
             "pronunciation_issues": pronunciation_issues,
         }
 
     except json.JSONDecodeError:
         # If GPT didn't return valid JSON, provide default scores
-        scores = {"fluency": 5.0, "lexical": 5.0, "grammar": 4.5, "pronunciation": 5.0, "overall": 5.0}
+        scores = {"fluency": 40, "lexical": 40, "grammar": 38, "pronunciation": 40, "overall": 40}
         feedback = content if content else "Unable to generate detailed feedback."
         db.complete_session(session_id, scores, feedback)
         return {"scores": scores, "feedback": feedback}
@@ -526,19 +555,19 @@ async def generate_follow_up(body: FollowUpRequest, user=Depends(get_current_use
         from openai import OpenAI
         client = OpenAI(api_key=OPENAI_KEY)
         prompt = (
-            f"You are an IELTS Speaking examiner conducting Part 3.\n"
+            f"You are a Multilevel Speaking examiner conducting Part 3.\n"
             f"The candidate was asked: \"{body.question}\"\n"
             f"They answered: \"{body.answer}\"\n\n"
             "Generate ONE natural follow-up question that:\n"
             "- Digs deeper into the topic\n"
-            "- Is appropriate for IELTS Part 3 discussion\n"
+            "- Is appropriate for Multilevel Part 3 discussion\n"
             "- Encourages the candidate to elaborate or give opinions\n\n"
             "Return ONLY the follow-up question text, nothing else."
         )
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are an IELTS examiner. Return only the follow-up question."},
+                {"role": "system", "content": "You are a Multilevel examiner. Return only the follow-up question."},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=100,
@@ -561,7 +590,7 @@ async def generate_sample_answer(body: SampleAnswerRequest, user=Depends(get_cur
         from openai import OpenAI
         client = OpenAI(api_key=OPENAI_KEY)
         prompt = (
-            f"You are an IELTS Speaking expert. Generate a Band 7+ sample answer for this IELTS Part {body.part} question:\n\n"
+            f"You are a Multilevel Speaking expert. Generate a Score 60+ sample answer for this Multilevel Part {body.part} question:\n\n"
             f"Question: {body.question}\n\n"
             "Requirements:\n"
             "- Use natural, fluent English\n"
@@ -574,7 +603,7 @@ async def generate_sample_answer(body: SampleAnswerRequest, user=Depends(get_cur
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are an IELTS Speaking expert. Provide only the sample answer."},
+                {"role": "system", "content": "You are a Multilevel Speaking expert. Provide only the sample answer."},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=400,
@@ -604,12 +633,15 @@ async def study_streak(user=Depends(get_current_user)):
     total_hours = db.get_total_practice_hours(user["user_id"])
     avg_score = db.get_average_score(user["user_id"])
     settings = db.get_user_settings(user["user_id"])
+    cefr_level = db.score_to_cefr(avg_score) if avg_score else None
     return {
         "streak": streak,
         "total_sessions": total_sessions,
         "total_hours": total_hours,
         "average_score": avg_score,
         "target_score": settings.get("target_score", 6.5),
+        "target_level": settings.get("target_level", "B2"),
+        "cefr_level": cefr_level,
     }
 
 
@@ -617,36 +649,12 @@ async def study_streak(user=Depends(get_current_user)):
 async def get_tips(user=Depends(get_current_user)):
     return {
         "tips": [
-            {
-                "title": "Part 1: Keep it Natural",
-                "content": "Answer in 2-3 sentences. Don't memorize scripts. Be yourself and speak naturally.",
-                "icon": "chat"
-            },
-            {
-                "title": "Part 2: Use the Minute",
-                "content": "Use your 1-minute preparation time wisely. Make brief notes on key points you want to cover.",
-                "icon": "edit"
-            },
-            {
-                "title": "Part 3: Go Deeper",
-                "content": "Give developed answers with examples and explanations. Show you can discuss abstract topics.",
-                "icon": "lightbulb"
-            },
-            {
-                "title": "Vocabulary: Topic Words",
-                "content": "Learn vocabulary by topic (education, technology, environment). Use collocations naturally.",
-                "icon": "book"
-            },
-            {
-                "title": "Fluency: Don't Panic",
-                "content": "It's okay to pause briefly. Use fillers like 'Well...', 'That's an interesting question...'",
-                "icon": "mic"
-            },
-            {
-                "title": "Grammar: Mix it Up",
-                "content": "Use a range of structures: conditionals, passive voice, relative clauses. Accuracy matters more than complexity.",
-                "icon": "check"
-            },
+            {"title": "Part 1.1: Interview", "content": "Answer in 2-3 sentences. Be yourself and speak naturally. Each question has 30 seconds.", "icon": "chat"},
+            {"title": "Part 1.2: Pictures", "content": "Describe what you see clearly. Compare the images and give your opinion. 30 seconds per question.", "icon": "image"},
+            {"title": "Part 2: Discussion", "content": "Give developed answers with examples and explanations. You have 60 seconds per question.", "icon": "lightbulb"},
+            {"title": "Part 3: Debate", "content": "Choose a side (For or Against) and argue your position convincingly. You have 120 seconds.", "icon": "scale"},
+            {"title": "Vocabulary: Topic Words", "content": "Learn vocabulary by topic (education, technology, environment). Use collocations naturally.", "icon": "book"},
+            {"title": "Grammar: Mix it Up", "content": "Use a range of structures: conditionals, passive voice, relative clauses. Accuracy matters more than complexity.", "icon": "check"},
         ]
     }
 

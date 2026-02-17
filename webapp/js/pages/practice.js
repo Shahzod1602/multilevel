@@ -1,83 +1,28 @@
 /**
- * Practice page — question display, audio recording, transcription, results.
+ * Practice page — single-part practice with recording, transcription, results.
  */
 const PracticePage = {
     sessionId: null,
     questions: [],
+    images: [],
+    partData: null,
     currentIndex: 0,
-    part: 1,
+    part: '1.1',
     responses: [],
-    state: 'idle', // idle, recording, processing, results
-
-    selectedTopic: null,
+    state: 'idle',
+    debateSide: null,
 
     async render(container, params = {}) {
-        this.part = params.part || 1;
+        this.part = params.part || '1.1';
         this.currentIndex = 0;
         this.responses = [];
         this.state = 'idle';
-        this.selectedTopic = null;
+        this.questions = [];
+        this.images = [];
+        this.partData = null;
+        this.debateSide = null;
 
-        container.innerHTML = `<div class="loading"><div class="spinner"></div><span>Loading topics...</span></div>`;
-
-        try {
-            const topicResult = await API.get(`/api/topics?part=${this.part}`);
-            const topics = topicResult.topics || [];
-
-            if (topics.length > 1) {
-                this.renderTopicSelector(container, topics);
-            } else {
-                await this.startSession(container);
-            }
-        } catch (err) {
-            // Fallback: start without topic filter
-            await this.startSession(container);
-        }
-    },
-
-    renderTopicSelector(container, topics) {
-        const topicCards = topics.map(t => `
-            <div class="topic-chip" data-topic="${t}">${t}</div>
-        `).join('');
-
-        container.innerHTML = `
-            <div class="page-header">
-                <button class="back-btn" id="back-btn">&#8592;</button>
-                <h2>Part ${this.part} Practice</h2>
-            </div>
-            <div class="card">
-                <h3>Choose a Topic</h3>
-                <p class="text-secondary text-sm">Select a topic or start with random questions</p>
-                <div class="topic-grid mt-12">${topicCards}</div>
-            </div>
-            <button class="btn btn-primary mt-12" id="random-btn">Random Questions</button>
-        `;
-
-        container.querySelector('#back-btn').addEventListener('click', () => App.navigate('home'));
-
-        container.querySelectorAll('.topic-chip').forEach(chip => {
-            chip.addEventListener('click', () => {
-                container.querySelectorAll('.topic-chip').forEach(c => c.classList.remove('active'));
-                chip.classList.add('active');
-                this.selectedTopic = chip.dataset.topic;
-            });
-        });
-
-        container.querySelector('#random-btn').addEventListener('click', async () => {
-            await this.startSession(container);
-        });
-
-        // Double-click or tap on selected topic starts session
-        container.querySelectorAll('.topic-chip').forEach(chip => {
-            chip.addEventListener('click', async () => {
-                if (this.selectedTopic === chip.dataset.topic) {
-                    await this.startSession(container);
-                }
-                this.selectedTopic = chip.dataset.topic;
-                container.querySelectorAll('.topic-chip').forEach(c => c.classList.remove('active'));
-                chip.classList.add('active');
-            });
-        });
+        await this.startSession(container);
     },
 
     async startSession(container) {
@@ -85,11 +30,17 @@ const PracticePage = {
 
         try {
             const payload = { type: 'practice', part: this.part };
-            if (this.selectedTopic) payload.topic = this.selectedTopic;
-
             const result = await API.post('/api/sessions/start', payload);
             this.sessionId = result.session_id;
             this.questions = result.questions || [];
+            this.images = result.images || [];
+            this.partData = result.part_data || null;
+
+            // Part 3 debate — go to debate flow
+            if (this.part === "3" && this.partData) {
+                this.renderDebateSelection(container);
+                return;
+            }
 
             if (!this.questions.length) {
                 container.innerHTML = `
@@ -122,19 +73,20 @@ const PracticePage = {
         }
     },
 
-    prepTimer: null,
-
     renderQuestion(container) {
         const q = this.questions[this.currentIndex];
         const progress = `${this.currentIndex + 1} / ${this.questions.length}`;
 
-        const isCueCard = this.part === 2;
-        const questionHtml = isCueCard
-            ? this.renderCueCard(q.question)
-            : `<div class="question-card">
-                <span class="part-badge">Question ${progress}</span>
-                <p class="question-text mt-12">${q.question}</p>
-              </div>`;
+        // Part 1.2: show images
+        const imagesHtml = (this.part === "1.2" && this.images.length)
+            ? `<div class="picture-gallery">
+                ${this.images.map((img, i) => `
+                    <div class="picture-card">
+                        <img src="${img}" alt="Picture ${i + 1}" loading="lazy">
+                    </div>
+                `).join('')}
+              </div>`
+            : '';
 
         container.innerHTML = `
             <div class="page-header">
@@ -142,11 +94,14 @@ const PracticePage = {
                 <h2>Part ${this.part} Practice</h2>
             </div>
 
-            ${questionHtml}
+            ${imagesHtml}
 
-            ${isCueCard ? '<div id="prep-timer-area"></div>' : ''}
+            <div class="question-card">
+                <span class="part-badge">Question ${progress}</span>
+                <p class="question-text mt-12">${q.question}</p>
+            </div>
 
-            <div class="recorder-area ${isCueCard ? 'hidden' : ''}" id="recorder-area">
+            <div class="recorder-area" id="recorder-area">
                 <button class="record-btn" id="record-btn">
                     <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
@@ -162,76 +117,91 @@ const PracticePage = {
         `;
 
         container.querySelector('#back-btn').addEventListener('click', () => {
-            if (this.prepTimer) { clearInterval(this.prepTimer); this.prepTimer = null; }
             if (Recorder.isRecording()) Recorder.stop();
             App.navigate('home');
         });
 
         this.setupRecordButton(container);
-
-        if (isCueCard) {
-            this.startPrepTimer(container);
-        }
     },
 
-    renderCueCard(question) {
-        const bullets = [
-            'what it is / who it is',
-            'when and where it happened',
-            'how you felt about it',
-            'and explain why it is important to you'
-        ];
-        return `
-            <div class="cue-card">
-                <span class="part-badge">Part 2 - Cue Card</span>
-                <p class="question-text mt-12">${question}</p>
-                <div class="cue-bullets mt-12">
-                    <p class="cue-label">You should say:</p>
-                    <ul>
-                        ${bullets.map(b => `<li>${b}</li>`).join('')}
-                    </ul>
+    renderDebateSelection(container) {
+        const pd = this.partData;
+
+        container.innerHTML = `
+            <div class="page-header">
+                <button class="back-btn" id="back-btn">&#8592;</button>
+                <h2>Part 3 - Debate</h2>
+            </div>
+
+            <div class="debate-card">
+                <h3>${pd.topic}</h3>
+                <div class="debate-table">
+                    <div class="debate-col for">
+                        <div class="debate-col-header">For</div>
+                        ${(pd.for_points || []).map(p => `<div class="debate-point">${p}</div>`).join('')}
+                    </div>
+                    <div class="debate-col against">
+                        <div class="debate-col-header">Against</div>
+                        ${(pd.against_points || []).map(p => `<div class="debate-point">${p}</div>`).join('')}
+                    </div>
                 </div>
             </div>
-        `;
-    },
 
-    startPrepTimer(container) {
-        const prepArea = container.querySelector('#prep-timer-area');
-        const recorderArea = container.querySelector('#recorder-area');
-        let seconds = 60;
-
-        prepArea.innerHTML = `
-            <div class="prep-countdown">
-                <div class="prep-label">Preparation Time</div>
-                <div class="prep-time" id="prep-time">1:00</div>
-                <p class="text-sm text-secondary">Think about what you want to say</p>
-                <button class="btn btn-outline mt-12" id="skip-prep">Skip & Start Speaking</button>
+            <p class="text-center text-secondary mt-12">Choose your side:</p>
+            <div style="display:flex;gap:10px;margin-top:12px">
+                <button class="btn debate-btn for" id="for-btn">For</button>
+                <button class="btn debate-btn against" id="against-btn">Against</button>
             </div>
         `;
 
-        const updateTimer = () => {
-            const m = Math.floor(seconds / 60);
-            const s = seconds % 60;
-            const el = container.querySelector('#prep-time');
-            if (el) el.textContent = `${m}:${s.toString().padStart(2, '0')}`;
-        };
+        container.querySelector('#back-btn').addEventListener('click', () => App.navigate('home'));
 
-        const endPrep = () => {
-            if (this.prepTimer) { clearInterval(this.prepTimer); this.prepTimer = null; }
-            prepArea.innerHTML = '';
-            recorderArea.classList.remove('hidden');
-        };
+        container.querySelector('#for-btn').addEventListener('click', () => {
+            this.debateSide = 'for';
+            this.renderDebateRecording(container);
+        });
+        container.querySelector('#against-btn').addEventListener('click', () => {
+            this.debateSide = 'against';
+            this.renderDebateRecording(container);
+        });
+    },
 
-        container.querySelector('#skip-prep').addEventListener('click', endPrep);
+    renderDebateRecording(container) {
+        const pd = this.partData;
 
-        this.prepTimer = setInterval(() => {
-            seconds--;
-            if (seconds <= 0) {
-                endPrep();
-            } else {
-                updateTimer();
-            }
-        }, 1000);
+        container.innerHTML = `
+            <div class="page-header">
+                <button class="back-btn" id="back-btn">&#8592;</button>
+                <h2>Part 3 - Debate</h2>
+            </div>
+
+            <div class="card text-center">
+                <span class="part-badge">Arguing ${this.debateSide === 'for' ? 'FOR' : 'AGAINST'}</span>
+                <p class="question-text mt-12">${pd.topic}</p>
+                <p class="text-sm text-secondary mt-8">You have 120 seconds to argue your position.</p>
+            </div>
+
+            <div class="recorder-area" id="recorder-area">
+                <button class="record-btn" id="record-btn">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                        <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                    </svg>
+                </button>
+                <div class="timer" id="timer">0:00</div>
+                <p class="text-sm text-secondary mt-8" id="record-hint">Tap to start recording</p>
+            </div>
+
+            <div id="transcription-area"></div>
+            <div id="action-area"></div>
+        `;
+
+        container.querySelector('#back-btn').addEventListener('click', () => {
+            if (Recorder.isRecording()) Recorder.stop();
+            App.navigate('home');
+        });
+
+        this.setupRecordButton(container);
     },
 
     setupRecordButton(container) {
@@ -241,7 +211,6 @@ const PracticePage = {
 
         btn.addEventListener('click', async () => {
             if (this.state === 'recording') {
-                // Stop recording
                 Recorder.stop();
                 this.state = 'processing';
                 btn.classList.remove('recording');
@@ -252,7 +221,6 @@ const PracticePage = {
 
             if (this.state === 'processing') return;
 
-            // Start recording
             const started = await Recorder.start(
                 (seconds) => {
                     timer.textContent = Recorder.formatTime(seconds);
@@ -277,22 +245,29 @@ const PracticePage = {
         const actionArea = container.querySelector('#action-area');
         const hint = container.querySelector('#record-hint');
         const btn = container.querySelector('#record-btn');
+        const isDebate = (this.part === "3");
 
         transcriptionArea.innerHTML = `<div class="loading"><div class="spinner"></div><span>Transcribing...</span></div>`;
 
         try {
-            const q = this.questions[this.currentIndex];
+            const questionText = isDebate
+                ? this.partData.topic
+                : this.questions[this.currentIndex].question;
+
             const extMap = {'audio/webm': '.webm', 'audio/ogg': '.ogg', 'audio/mp4': '.m4a', 'audio/mpeg': '.mp3'};
             const ext = extMap[(Recorder.mimeType || '').split(';')[0]] || '.ogg';
             const formData = new FormData();
             formData.append('audio', blob, `recording${ext}`);
-            formData.append('question', q.question);
+            formData.append('question', questionText);
             formData.append('part', this.part);
+            if (isDebate && this.debateSide) {
+                formData.append('debate_side', this.debateSide);
+            }
 
             const result = await API.postForm(`/api/sessions/${this.sessionId}/respond`, formData);
 
             this.responses.push({
-                question: q.question,
+                question: questionText,
                 transcription: result.transcription,
                 duration: result.duration,
             });
@@ -308,52 +283,62 @@ const PracticePage = {
                 </div>
             `;
 
-            const isLast = this.currentIndex >= this.questions.length - 1;
-            const showFollowUp = this.part === 3;
+            if (isDebate) {
+                // Debate done — go to results
+                actionArea.innerHTML = `
+                    <button class="btn btn-primary mt-12" id="next-btn">Get Feedback</button>
+                `;
+                actionArea.querySelector('#next-btn').addEventListener('click', () => {
+                    this.showResults(container);
+                });
+            } else {
+                const isLast = this.currentIndex >= this.questions.length - 1;
+                const showFollowUp = this.part === "2";
 
-            actionArea.innerHTML = `
-                ${showFollowUp ? '<button class="btn btn-outline mt-12" id="followup-btn">Get Follow-up Question</button>' : ''}
-                <button class="btn btn-primary mt-12" id="next-btn">
-                    ${isLast ? 'Get Feedback' : 'Next Question'}
-                </button>
-            `;
+                actionArea.innerHTML = `
+                    ${showFollowUp ? '<button class="btn btn-outline mt-12" id="followup-btn">Get Follow-up Question</button>' : ''}
+                    <button class="btn btn-primary mt-12" id="next-btn">
+                        ${isLast ? 'Get Feedback' : 'Next Question'}
+                    </button>
+                `;
 
-            if (showFollowUp) {
-                actionArea.querySelector('#followup-btn').addEventListener('click', async () => {
-                    const followBtn = actionArea.querySelector('#followup-btn');
-                    followBtn.textContent = 'Generating...';
-                    followBtn.disabled = true;
-                    try {
-                        const fuResult = await API.post('/api/follow-up', {
-                            question: q.question,
-                            answer: result.transcription,
-                            part: 3,
-                        });
-                        followBtn.remove();
-                        const fuDiv = document.createElement('div');
-                        fuDiv.className = 'followup-card mt-12';
-                        fuDiv.innerHTML = `
-                            <h3>Follow-up Question</h3>
-                            <p class="question-text">${fuResult.follow_up_question}</p>
-                            <p class="text-xs text-secondary mt-8">You can answer this or skip to the next question</p>
-                        `;
-                        actionArea.insertBefore(fuDiv, actionArea.querySelector('#next-btn'));
-                    } catch (e) {
-                        followBtn.textContent = 'Failed - Try Again';
-                        followBtn.disabled = false;
+                if (showFollowUp) {
+                    actionArea.querySelector('#followup-btn').addEventListener('click', async () => {
+                        const followBtn = actionArea.querySelector('#followup-btn');
+                        followBtn.textContent = 'Generating...';
+                        followBtn.disabled = true;
+                        try {
+                            const fuResult = await API.post('/api/follow-up', {
+                                question: questionText,
+                                answer: result.transcription,
+                                part: "2",
+                            });
+                            followBtn.remove();
+                            const fuDiv = document.createElement('div');
+                            fuDiv.className = 'followup-card mt-12';
+                            fuDiv.innerHTML = `
+                                <h3>Follow-up Question</h3>
+                                <p class="question-text">${fuResult.follow_up_question}</p>
+                                <p class="text-xs text-secondary mt-8">You can answer this or skip to the next question</p>
+                            `;
+                            actionArea.insertBefore(fuDiv, actionArea.querySelector('#next-btn'));
+                        } catch (e) {
+                            followBtn.textContent = 'Failed - Try Again';
+                            followBtn.disabled = false;
+                        }
+                    });
+                }
+
+                actionArea.querySelector('#next-btn').addEventListener('click', () => {
+                    if (isLast) {
+                        this.showResults(container);
+                    } else {
+                        this.currentIndex++;
+                        this.state = 'idle';
+                        this.renderQuestion(container);
                     }
                 });
             }
-
-            actionArea.querySelector('#next-btn').addEventListener('click', () => {
-                if (isLast) {
-                    this.showResults(container);
-                } else {
-                    this.currentIndex++;
-                    this.state = 'idle';
-                    this.renderQuestion(container);
-                }
-            });
 
             this.state = 'idle';
             btn.classList.remove('disabled');
@@ -369,6 +354,17 @@ const PracticePage = {
             btn.classList.remove('disabled');
             hint.textContent = 'Tap to try again';
         }
+    },
+
+    cefrBadge(score) {
+        if (score == null) return '';
+        score = Math.round(score);
+        let level, cls;
+        if (score >= 65) { level = 'C1'; cls = 'c1'; }
+        else if (score >= 51) { level = 'B2'; cls = 'b2'; }
+        else if (score >= 38) { level = 'B1'; cls = 'b1'; }
+        else { level = 'Below B1'; cls = 'below-b1'; }
+        return `<span class="cefr-badge ${cls}">${level}</span>`;
     },
 
     renderGrammarCorrections(corrections) {
@@ -411,6 +407,7 @@ const PracticePage = {
         try {
             const result = await API.post(`/api/sessions/${this.sessionId}/complete`);
             const scores = result.scores || {};
+            const overall = Math.round(scores.overall || 0);
 
             container.innerHTML = `
                 <div class="page-header">
@@ -420,24 +417,24 @@ const PracticePage = {
 
                 <div class="results-card">
                     <div class="score-main">
-                        <div class="score">${(scores.overall || 0).toFixed(1)}</div>
-                        <div class="label">Overall Band Score</div>
+                        <div class="score">${overall}</div>
+                        <div class="label">Overall Score ${this.cefrBadge(scores.overall)}</div>
                     </div>
                     <div class="score-breakdown">
                         <div class="score-item">
-                            <div class="value">${(scores.fluency || 0).toFixed(1)}</div>
+                            <div class="value">${Math.round(scores.fluency || 0)}</div>
                             <div class="name">Fluency</div>
                         </div>
                         <div class="score-item">
-                            <div class="value">${(scores.lexical || 0).toFixed(1)}</div>
+                            <div class="value">${Math.round(scores.lexical || 0)}</div>
                             <div class="name">Lexical</div>
                         </div>
                         <div class="score-item">
-                            <div class="value">${(scores.grammar || 0).toFixed(1)}</div>
+                            <div class="value">${Math.round(scores.grammar || 0)}</div>
                             <div class="name">Grammar</div>
                         </div>
                         <div class="score-item">
-                            <div class="value">${(scores.pronunciation || 0).toFixed(1)}</div>
+                            <div class="value">${Math.round(scores.pronunciation || 0)}</div>
                             <div class="name">Pronunciation</div>
                         </div>
                     </div>
@@ -463,11 +460,11 @@ const PracticePage = {
             container.querySelector('#sample-btn').addEventListener('click', async () => {
                 sampleArea.innerHTML = `<div class="loading"><div class="spinner"></div><span>Generating sample...</span></div>`;
                 try {
-                    const q = this.questions[0];
+                    const q = this.questions[0] || { question: this.partData?.topic || '' };
                     const sampleResult = await API.post('/api/sample-answer', { question: q.question, part: this.part });
                     sampleArea.innerHTML = `
                         <div class="sample-card">
-                            <h3>Sample Answer (Band 7+)</h3>
+                            <h3>Sample Answer (Score 60+)</h3>
                             <p class="text">${sampleResult.sample_answer}</p>
                         </div>
                     `;

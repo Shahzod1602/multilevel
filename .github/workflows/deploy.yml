@@ -15,7 +15,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           password: ${{ secrets.SERVER_PASSWORD }}
           script: |
-            cd /opt/ieltspeakapp
+            cd /opt/multilevelapp
             git pull origin main
             docker compose build --no-cache
             docker compose up -d

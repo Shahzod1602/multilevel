@@ -1,1131 +1,436 @@
-[
-  {
-    "part": 1,
-    "question": "Where do you prefer to keep your pet, indoors or outdoors?",
-    "topic": "Animals and pets",
-    "added_date": "2025-01-07"
-  },
-  {
-    "part": 1,
-    "question": "What's your favourite animal?",
-    "topic": "Animals and pets"
-  },
-  {
-    "part": 1,
-    "question": "Have you ever had a pet?",
-    "topic": "Animals and pets"
-  },
-  {
-    "part": 1,
-    "question": "What's the most popular animal in your country?",
-    "topic": "Animals and pets"
-  },
-  {
-    "part": 1,
-    "question": "When was the last time you had a few days off?",
-    "topic": "Days off"
-  },
-  {
-    "part": 1,
-    "question": "What do you do when you have days off?",
-    "topic": "Days off"
-  },
-  {
-    "part": 1,
-    "question": "What would you like to do if you had a day off tomorrow?",
-    "topic": "Days off"
-  },
-  {
-    "part": 1,
-    "question": "Do you usually spend your days off with your parents or with your friends?",
-    "topic": "Days off"
-  },
-  {
-    "part": 1,
-    "question": "What kind of food did you like when you were young?",
-    "topic": "Food"
-  },
-  {
-    "part": 1,
-    "question": "What kinds of food do you particularly like?",
-    "topic": "Food"
-  },
-  {
-    "part": 1,
-    "question": "What kinds of food are most popular in your country?",
-    "topic": "Food"
-  },
-  {
-    "part": 1,
-    "question": "Is there any food you don't like?",
-    "topic": "Food"
-  },
-  {
-    "part": 1,
-    "question": "Have you ever locked yourself out?",
-    "topic": "Keys"
-  },
-  {
-    "part": 1,
-    "question": "Do you think it's a good idea to leave your keys with a neighbour?",
-    "topic": "Keys"
-  },
-  {
-    "part": 1,
-    "question": "Have you ever lost your keys?",
-    "topic": "Keys"
-  },
-  {
-    "part": 1,
-    "question": "Do you always bring a lot of keys with you?",
-    "topic": "Keys"
-  },
-  {
-    "part": 1,
-    "question": "Do you remember your dreams when you wake up?",
-    "topic": "Dreams"
-  },
-  {
-    "part": 1,
-    "question": "Do you think dreams will affect life?",
-    "topic": "Dreams"
-  },
-  {
-    "part": 1,
-    "question": "Do you think dreams have special meanings?",
-    "topic": "Dreams"
-  },
-  {
-    "part": 1,
-    "question": "Do you like hearing other people's dreams?",
-    "topic": "Dreams"
-  },
-  {
-    "part": 1,
-    "question": "Do you share your dreams with others?",
-    "topic": "Dreams"
-  },
-  {
-    "part": 1,
-    "question": "Do you like reading?",
-    "topic": "Reading"
-  },
-  {
-    "part": 1,
-    "question": "What books do you like to read?",
-    "topic": "Reading"
-  },
-  {
-    "part": 1,
-    "question": "What book did you read recently?",
-    "topic": "Reading"
-  },
-  {
-    "part": 1,
-    "question": "What did you learn from it?",
-    "topic": "Reading"
-  },
-  {
-    "part": 1,
-    "question": "What kind of gifts are popular in your country?",
-    "topic": "Gifts"
-  },
-  {
-    "part": 1,
-    "question": "What's the best gift you have ever received?",
-    "topic": "Gifts"
-  },
-  {
-    "part": 1,
-    "question": "What do you give others as gifts?",
-    "topic": "Gifts"
-  },
-  {
-    "part": 1,
-    "question": "What gift have you received recently?",
-    "topic": "Gifts"
-  },
-  {
-    "part": 1,
-    "question": "How do we choose gifts?",
-    "topic": "Gifts"
-  },
-  {
-    "part": 1,
-    "question": "Do you like to get up early?",
-    "topic": "Morning time"
-  },
-  {
-    "part": 1,
-    "question": "What is your morning routine?",
-    "topic": "Morning time"
-  },
-  {
-    "part": 1,
-    "question": "What do you usually do in the morning?",
-    "topic": "Morning time"
-  },
-  {
-    "part": 1,
-    "question": "Do you have any hobbies?",
-    "topic": "Hobby"
-  },
-  {
-    "part": 1,
-    "question": "Do you have the same hobbies as your family members?",
-    "topic": "Hobby"
-  },
-  {
-    "part": 1,
-    "question": "Did you have any hobbies when you were a child?",
-    "topic": "Hobby"
-  },
-  {
-    "part": 1,
-    "question": "Do you have a hobby that you've had since childhood?",
-    "topic": "Hobby"
-  },
-  {
-    "part": 1,
-    "question": "Do you type on a desktop or laptop keyboard every day?",
-    "topic": "Typing"
-  },
-  {
-    "part": 1,
-    "question": "When did you learn how to type on a keyboard?",
-    "topic": "Typing"
-  },
-  {
-    "part": 1,
-    "question": "How do you improve your typing?",
-    "topic": "Typing"
-  },
-  {
-    "part": 1,
-    "question": "Do you walk a lot?",
-    "topic": "Walking"
-  },
-  {
-    "part": 1,
-    "question": "Did you often go outside to have a walk when you were a child?",
-    "topic": "Walking"
-  },
-  {
-    "part": 1,
-    "question": "Why do people like to walk in parks?",
-    "topic": "Walking"
-  },
-  {
-    "part": 1,
-    "question": "Where would you like to take a long walk if you had the chance?",
-    "topic": "Walking"
-  },
-  {
-    "part": 1,
-    "question": "Where have you gone for a walk lately?",
-    "topic": "Walking"
-  },
-  {
-    "part": 1,
-    "question": "Do you take photos of buildings?",
-    "topic": "Buildings"
-  },
-  {
-    "part": 1,
-    "question": "Is there a building that you would like to visit?",
-    "topic": "Buildings"
-  },
-  {
-    "part": 1,
-    "question": "Do you like taking pictures of different views?",
-    "topic": "Views"
-  },
-  {
-    "part": 1,
-    "question": "Do you prefer views in urban areas or rural areas?",
-    "topic": "Views"
-  },
-  {
-    "part": 1,
-    "question": "Do you prefer views in your own country or in other countries?",
-    "topic": "Views"
-  },
-  {
-    "part": 1,
-    "question": "What did you enjoy doing as a child?",
-    "topic": "Childhood activities"
-  },
-  {
-    "part": 1,
-    "question": "Did you enjoy your childhood?",
-    "topic": "Childhood activities"
-  },
-  {
-    "part": 2,
-    "question": "Describe a film you watched recently that you felt disappointed about",
-    "topic": "Film you felt disappointed about"
-  },
-  {
-    "part": 3,
-    "question": "What makes a movie a blockbuster?",
-    "topic": "Films",
-    "date_range": "January - August 2026"
-  },
-  {
-    "part": 3,
-    "question": "Are actors and actresses important to movies?",
-    "topic": "Films",
-    "date_range": "January - August 2026"
-  },
-  {
-    "part": 3,
-    "question": "Do you think films with famous actors or actresses are more likely to become successful films?",
-    "topic": "Films",
-    "date_range": "January - August 2026"
-  },
-  {
-    "part": 3,
-    "question": "What kinds of movies are successful in your country?",
-    "topic": "Films",
-    "date_range": "January - August 2026"
-  },
-  {
-    "part": 3,
-    "question": "Do people in your country still like to go to a cinema?",
-    "topic": "Films",
-    "date_range": "January - August 2026"
-  },
-  {
-    "part": 3,
-    "question": "Where do people watch movies?",
-    "topic": "Films",
-    "date_range": "January - August 2026"
-  },
-  {
-    "part": 2,
-    "question": "Describe a family member that did something that made you feel proud",
-    "topic": "Family member that made you feel Proud"
-  },
-  {
-    "part": 3,
-    "question": "Is it good to reward children too often?",
-    "topic": "Being proud"
-  },
-  {
-    "part": 3,
-    "question": "On what occasions would adults feel proud of themselves?",
-    "topic": "Being proud"
-  },
-  {
-    "part": 3,
-    "question": "Is it a good idea to reward children for doing homework or housework?",
-    "topic": "Being proud"
-  },
-  {
-    "part": 3,
-    "question": "What would children do to make their parents proud?",
-    "topic": "Being proud"
-  },
-  {
-    "part": 3,
-    "question": "What did you do to make your parents proud when you were young?",
-    "topic": "Being proud"
-  },
-  {
-    "part": 3,
-    "question": "What advantages of yours make you proud?",
-    "topic": "Being proud"
-  },
-  {
-    "part": 3,
-    "question": "When was the last time that you felt proud of yourself?",
-    "topic": "Being proud"
-  },
-  {
-    "part": 2,
-    "question": "Describe your perfect job",
-    "topic": "Perfect job"
-  },
-  {
-    "part": 3,
-    "question": "What kind of jobs do children like?",
-    "topic": "Perfect job"
-  },
-  {
-    "part": 3,
-    "question": "How can people find a perfect job?",
-    "topic": "Perfect job"
-  },
-  {
-    "part": 3,
-    "question": "What factors should people take into account when choosing a job?",
-    "topic": "Perfect job"
-  },
-  {
-    "part": 3,
-    "question": "Which is more important when choosing a job, high salary or interest?",
-    "topic": "Perfect job"
-  },
-  {
-    "part": 3,
-    "question": "Is salary the main reason people choose a certain job?",
-    "topic": "Perfect job"
-  },
-  {
-    "part": 2,
-    "question": "Describe an experience when you were not allowed to use a mobile phone",
-    "topic": "Not being allowed to use a mobile phone"
-  },
-  {
-    "part": 3,
-    "question": "Do young and old people use phones in the same way?",
-    "topic": "Mobile phones"
-  },
-  {
-    "part": 3,
-    "question": "What positive and negative effects do mobile phones have on friendship?",
-    "topic": "Mobile phones"
-  },
-  {
-    "part": 3,
-    "question": "Is it a waste of time to take pictures with mobile phones?",
-    "topic": "Mobile phones"
-  },
-  {
-    "part": 3,
-    "question": "Many people think mobile phones can be annoying at times. Can you give any examples of that?",
-    "topic": "Mobile phones"
-  },
-  {
-    "part": 3,
-    "question": "Do you think there should be laws on the use of mobile phones?",
-    "topic": "Mobile phones"
-  },
-  {
-    "part": 2,
-    "question": "Describe a famous person you'd like to meet",
-    "topic": "Famous person you'd like to meet"
-  },
-  {
-    "part": 3,
-    "question": "What are the advantages and disadvantages of being a famous child?",
-    "topic": "Fame"
-  },
-  {
-    "part": 3,
-    "question": "What can children do with their fame?",
-    "topic": "Fame"
-  },
-  {
-    "part": 3,
-    "question": "What can today's children do to become famous?",
-    "topic": "Fame"
-  },
-  {
-    "part": 3,
-    "question": "Do people become famous just because of their talent?",
-    "topic": "Fame"
-  },
-  {
-    "part": 2,
-    "question": "Describe a place in your home where you like to relax",
-    "topic": "Place in your home where you can relax"
-  },
-  {
-    "part": 3,
-    "question": "Why is it difficult for some people to relax?",
-    "topic": "Relaxation"
-  },
-  {
-    "part": 3,
-    "question": "Do you think there should be classes for training young people and children how to relax?",
-    "topic": "Relaxation"
-  },
-  {
-    "part": 3,
-    "question": "Which is more important, mental relaxation or physical relaxation?",
-    "topic": "Relaxation"
-  },
-  {
-    "part": 3,
-    "question": "Do people in your country exercise after work?",
-    "topic": "Relaxation"
-  },
-  {
-    "part": 3,
-    "question": "What are the benefits of doing exercise?",
-    "topic": "Relaxation"
-  },
-  {
-    "part": 3,
-    "question": "What is the place where people spend most of their time in their home?",
-    "topic": "Relaxation"
-  },
-  {
-    "part": 2,
-    "question": "Describe something you can't live without (not a computer or phone)",
-    "topic": "Something you can't live without"
-  },
-  {
-    "part": 3,
-    "question": "Why do all children like toys?",
-    "topic": "Toys",
-    "added_date": "2026-01-11"
-  },
-  {
-    "part": 3,
-    "question": "Do you think it's good for a child to take his or her favourite toy with them all the time?",
-    "topic": "Toys",
-    "added_date": "2026-01-11"
-  },
-  {
-    "part": 3,
-    "question": "Do you think that keeping old things in a family is a great way to connect with the past?",
-    "topic": "Old things"
-  },
-  {
-    "part": 3,
-    "question": "Why do grown- ups hate to throw away old things?",
-    "topic": "Old things"
-  },
-  {
-    "part": 3,
-    "question": "How have people's shopping habits changed in recent decades?",
-    "topic": "Shopping habits"
-  },
-  {
-    "part": 3,
-    "question": "How has the way people buy things changed?",
-    "topic": "Shopping habits"
-  },
-  {
-    "part": 3,
-    "question": "How do shops attract customers?",
-    "topic": "Shopping habits"
-  },
-  {
-    "part": 3,
-    "question": "What makes people buy new things?",
-    "topic": "Shopping habits"
-  },
-  {
-    "part": 2,
-    "question": "Describe an occasion you saw a lot of people smiling",
-    "topic": "Occasion when many people were smiling"
-  },
-  {
-    "part": 3,
-    "question": "Do people smile more when they are younger or older?",
-    "topic": "Smiling",
-    "added_date": "2026-01-11"
-  },
-  {
-    "part": 3,
-    "question": "Do you think people who like to smile are more friendly?",
-    "topic": "Smiling"
-  },
-  {
-    "part": 3,
-    "question": "Why do most people smile in photographs?",
-    "topic": "Smiling"
-  },
-  {
-    "part": 3,
-    "question": "Do women smile more than men? Why?",
-    "topic": "Smiling"
-  },
-  {
-    "part": 2,
-    "question": "Describe a time when you gave advice to others",
-    "topic": "Advice you gave"
-  },
-  {
-    "part": 3,
-    "question": "Should people prepare before giving advice?",
-    "topic": "Advice",
-    "added_date": "2026-01-17"
-  },
-  {
-    "part": 3,
-    "question": "Is it good to ask advice from strangers online?",
-    "topic": "Advice",
-    "added_date": "2026-01-17"
-  },
-  {
-    "part": 3,
-    "question": "What are the personalities of people whose job is to give advice to others?",
-    "topic": "Advice",
-    "added_date": "2026-01-17"
-  },
-  {
-    "part": 3,
-    "question": "What problems can people face if they ask many different people for advice?",
-    "topic": "Advice"
-  },
-  {
-    "part": 3,
-    "question": "Why do some people like to ask others for advice on almost everything?",
-    "topic": "Advice"
-  },
-  {
-    "part": 3,
-    "question": "In general, what kind of person is most suitable for giving advice to others?",
-    "topic": "Advice"
-  },
-  {
-    "part": 2,
-    "question": "Describe an app or program in your computer or phone",
-    "topic": "App or program"
-  },
-  {
-    "part": 3,
-    "question": "What are the differences between old and young people when using apps?",
-    "topic": "Apps",
-    "added_date": "2026-01-22"
-  },
-  {
-    "part": 3,
-    "question": "What are the drawbacks of having too many apps?",
-    "topic": "Apps"
-  },
-  {
-    "part": 3,
-    "question": "Why do some people not like using apps?",
-    "topic": "Apps"
-  },
-  {
-    "part": 3,
-    "question": "What are the most and the least popular apps in your country?",
-    "topic": "Apps"
-  },
-  {
-    "part": 3,
-    "question": "What kind of apps do you have on your phone?",
-    "topic": "Apps"
-  },
-  {
-    "part": 2,
-    "question": "Describe a country in which you would like to work or live for a short period of time",
-    "topic": "Country to work or live in for a short period of time"
-  },
-  {
-    "part": 3,
-    "question": "Why do people like travelling?",
-    "topic": "Working abroad, travelling",
-    "date_range": "January - August 2026"
-  },
-  {
-    "part": 3,
-    "question": "What jobs can people do abroad for a short period of time?",
-    "topic": "Working abroad, travelling",
-    "date_range": "January - August 2026"
-  },
-  {
-    "part": 3,
-    "question": "Is it good that now people have an opportunity to work abroad?",
-    "topic": "Working abroad, travelling",
-    "date_range": "January - August 2026"
-  },
-  {
-    "part": 2,
-    "question": "Describe an important old thing that your family has kept for a long time",
-    "topic": "Thing your family has kept for a long time"
-  },
-  {
-    "part": 3,
-    "question": "What are the differences between the things that people keep today and the things that people kept in the past?",
-    "topic": "Keeping things"
-  },
-  {
-    "part": 3,
-    "question": "As well as family photographs, what are some other things that people keep in their family for a long time?",
-    "topic": "Keeping things"
-  },
-  {
-    "part": 3,
-    "question": "In your culture, what sorts of things do people pass down from generation to generation?",
-    "topic": "Keeping things"
-  },
-  {
-    "part": 2,
-    "question": "Describe a long bike, motorbike, or car trip that you would like to take",
-    "topic": "Trip by bike, car or motorbike you want to have"
-  },
-  {
-    "part": 3,
-    "question": "How are transportation systems in rural and urban areas different?",
-    "topic": "Transportation"
-  },
-  {
-    "part": 3,
-    "question": "Which mode of transport is more popular in your country, a bicycle or car?",
-    "topic": "Transportation"
-  },
-  {
-    "part": 2,
-    "question": "Describe a time you needed to use your Imagination",
-    "topic": "Imagination"
-  },
-  {
-    "part": 3,
-    "question": "What kind of jobs require imagination? Do scientists need imagination in their work?",
-    "topic": "Imagination"
-  },
-  {
-    "part": 2,
-    "question": "Describe a film you watched and enjoyed",
-    "topic": "Film you watched and enjoyed"
-  },
-  {
-    "part": 3,
-    "question": "What makes a movie a blockbuster?",
-    "topic": "Films"
-  },
-  {
-    "part": 3,
-    "question": "Are actors and actresses important to movies?",
-    "topic": "Films"
-  },
-  {
-    "part": 3,
-    "question": "Do you think films with famous actors or actresses are more likely to become successful films?",
-    "topic": "Films"
-  },
-  {
-    "part": 3,
-    "question": "What kinds of movies are successful in your country?",
-    "topic": "Films"
-  },
-  {
-    "part": 3,
-    "question": "Do people in your country still like to go to a cinema?",
-    "topic": "Films"
-  },
-  {
-    "part": 3,
-    "question": "Where do people watch movies?",
-    "topic": "Films"
-  },
-  {
-    "part": 2,
-    "question": "Describe a story you read recently",
-    "topic": "Story you read recently"
-  },
-  {
-    "part": 3,
-    "question": "Why do most children like listening to stories before bedtime?",
-    "topic": "Stories"
-  },
-  {
-    "part": 3,
-    "question": "Is a good storyline important for a movie?",
-    "topic": "Stories"
-  },
-  {
-    "part": 3,
-    "question": "Why do children like hearing the same bedtime story?",
-    "topic": "Stories"
-  },
-  {
-    "part": 2,
-    "question": "Describe a person who solved a problem in a smart way",
-    "topic": "Person who solved a problem in a smart way"
-  },
-  {
-    "part": 3,
-    "question": "Are people born clever or need to learn to be clever?",
-    "topic": "Intelligence"
-  },
-  {
-    "part": 3,
-    "question": "Why are some children more intelligent than others?",
-    "topic": "Intelligence"
-  },
-  {
-    "part": 3,
-    "question": "Do you think society needs people with different types of intelligence?",
-    "topic": "Intelligence"
-  },
-  {
-    "part": 3,
-    "question": "Does modern society need talents of all kinds?",
-    "topic": "Intelligence"
-  },
-  {
-    "part": 2,
-    "question": "Describe a person who encouraged you to protect the nature",
-    "topic": "Person who encouraged you to protect the nature",
-    "date_range": "January - August 2026"
-  },
-  {
-    "part": 3,
-    "question": "How can parents teach their children to protect nature?",
-    "topic": "Nature protection"
-  },
-  {
-    "part": 3,
-    "question": "Should schools teach children to get close to nature?",
-    "topic": "Nature protection"
-  },
-  {
-    "part": 3,
-    "question": "Do you think there should be laws to protect nature?",
-    "topic": "Nature protection"
-  },
-  {
-    "part": 2,
-    "question": "Describe an occasion when you paid more than expected",
-    "topic": "Item on which you spent more than expected"
-  },
-  {
-    "part": 3,
-    "question": "What do young people spend money on?",
-    "topic": "Spending money"
-  },
-  {
-    "part": 3,
-    "question": "Is it good and necessary to teach children to save money?",
-    "topic": "Spending money"
-  },
-  {
-    "part": 3,
-    "question": "Do you think it is important to save money?",
-    "topic": "Spending money"
-  },
-  {
-    "part": 3,
-    "question": "Do you think that people buy a lot of things that they don't need?",
-    "topic": "Spending money"
-  },
-  {
-    "part": 2,
-    "question": "Describe a person who often helps others",
-    "topic": "Person who often helps others"
-  },
-  {
-    "part": 3,
-    "question": "Should children help their parents with household chores?",
-    "topic": "Helping others",
-    "added_date": "2026-01-17"
-  },
-  {
-    "part": 3,
-    "question": "What kind of help do people need when looking for a new job?",
-    "topic": "Helping others",
-    "added_date": "2026-01-17"
-  },
-  {
-    "part": 3,
-    "question": "Who should people ask for help, colleagues or family members?",
-    "topic": "Helping others",
-    "added_date": "2026-01-17"
-  },
-  {
-    "part": 3,
-    "question": "What can children help parents with?",
-    "topic": "Helping others"
-  },
-  {
-    "part": 3,
-    "question": "In your view, should children be taught to help others?",
-    "topic": "Helping others"
-  },
-  {
-    "part": 2,
-    "question": "Describe a piece of technology (not a phone) that you would like to own",
-    "topic": "Piece of technology you'd like to own"
-  },
-  {
-    "part": 3,
-    "question": "What are the differences between the technology of the past and that of today?",
-    "topic": "Technology",
-    "added_date": "2026-01-20"
-  },
-  {
-    "part": 3,
-    "question": "What are the differences between making friends in real life and online?",
-    "topic": "Technology",
-    "added_date": "2026-01-20"
-  },
-  {
-    "part": 3,
-    "question": "Does technological development have a negative impact on communication among people?",
-    "topic": "Technology",
-    "added_date": "2026-01-19"
-  },
-  {
-    "part": 3,
-    "question": "Do you think technology unites or separates people?",
-    "topic": "Technology"
-  },
-  {
-    "part": 3,
-    "question": "What effects does technology have on people's relationships?",
-    "topic": "Technology",
-    "added_date": "2026-01-19"
-  },
-  {
-    "part": 3,
-    "question": "What are the differences between talking with friends online and face- to- face?",
-    "topic": "Technology"
-  },
-  {
-    "part": 3,
-    "question": "What technology do people currently use?",
-    "topic": "Technology"
-  },
-  {
-    "part": 2,
-    "question": "Describe a time when you encouraged someone to do something that they didn't want to do",
-    "topic": "Encouraging someone to do what they didn't want to do"
-  },
-  {
-    "part": 3,
-    "question": "Is the role of a leader important in a group?",
-    "topic": "Leadership"
-  },
-  {
-    "part": 3,
-    "question": "How can leaders encourage employees?",
-    "topic": "Leadership"
-  },
-  {
-    "part": 3,
-    "question": "When should parents encourage their children?",
-    "topic": "Leadership"
-  },
-  {
-    "part": 2,
-    "question": "Describe one of your friends who learned something new (not from a teacher)",
-    "topic": "Friend who learned something new",
-    "date_range": "January - August 2026"
-  },
-  {
-    "part": 3,
-    "question": "Do you think enterprises should provide training for their employees?",
-    "topic": "Learning",
-    "added_date": "2026-01-22"
-  },
-  {
-    "part": 3,
-    "question": "Do you think learning many subjects at one time is better or learning one subject is better?",
-    "topic": "Learning"
-  },
-  {
-    "part": 3,
-    "question": "Do you think learning many subjects is beneficial to your work?",
-    "topic": "Learning"
-  },
-  {
-    "part": 3,
-    "question": "Do you think all teachers should have entertaining teaching styles?",
-    "topic": "Learning"
-  },
-  {
-    "part": 3,
-    "question": "Should teachers make lessons fun?",
-    "topic": "Learning"
-  },
-  {
-    "part": 3,
-    "question": "Is it important for people to learn new skills all life long?",
-    "topic": "Learning"
-  },
-  {
-    "part": 2,
-    "question": "Describe a person who makes plans a lot and is good at planning",
-    "topic": "Person who makes plans a lot"
-  },
-  {
-    "part": 3,
-    "question": "Do you think children should plan their future careers?",
-    "topic": "Planning",
-    "added_date": "2026-01-22"
-  },
-  {
-    "part": 3,
-    "question": "Should children ask their teachers or parents for advice when making plans?",
-    "topic": "Planning",
-    "added_date": "2026-01-22"
-  },
-  {
-    "part": 3,
-    "question": "In general, do you think planning is important?",
-    "topic": "Planning"
-  },
-  {
-    "part": 3,
-    "question": "Do you think everyone in your country makes everyday plans?",
-    "topic": "Planning"
-  },
-  {
-    "part": 2,
-    "question": "Describe a child who loves drawing or painting",
-    "topic": "Child who loves drawing or painting"
-  },
-  {
-    "part": 3,
-    "question": "What is the right age for a child to learn drawing?",
-    "topic": "Art"
-  },
-  {
-    "part": 3,
-    "question": "Why do most children draw more often than adults do?",
-    "topic": "Art"
-  },
-  {
-    "part": 3,
-    "question": "Why do some people visit galleries or museums instead of viewing artworks online?",
-    "topic": "Art"
-  },
-  {
-    "part": 3,
-    "question": "Do you think galleries and museums should be free of charge?",
-    "topic": "Art"
-  },
-  {
-    "part": 3,
-    "question": "How do artworks inspire people?",
-    "topic": "Art"
-  },
-  {
-    "part": 1,
-    "question": "How much time do you spend on these apps?",
-    "topic": "Apps"
-  },
-  {
-    "part": 1,
-    "question": "Do you mind noises?",
-    "topic": "Noise and quiet places"
-  },
-  {
-    "part": 1,
-    "question": "Do any noises bother you?",
-    "topic": "Noise and quiet places"
-  },
-  {
-    "part": 1,
-    "question": "Do you think there's too much noise in modern society?",
-    "topic": "Noise and quiet places"
-  },
-  {
-    "part": 1,
-    "question": "Are cities becoming noisier?",
-    "topic": "Noise and quiet places"
-  },
-  {
-    "part": 1,
-    "question": "Where is there louder noise, in cities or in the countryside?",
-    "topic": "Noise and quiet places"
-  },
-  {
-    "part": 1,
-    "question": "What type of noise do you come across in your daily life?",
-    "topic": "Noise and quiet places"
-  },
-  {
-    "part": 1,
-    "question": "Are there any sounds that you like?",
-    "topic": "Noise and quiet places"
-  },
-  {
-    "part": 2,
-    "question": "Describe a party that you enjoyed. You should say: what party it was, when it took place, where it was, whose party it was, why you enjoyed the party.",
-    "topic": "Parties"
-  },
-  {
-    "part": 3,
-    "question": "What would you do if you were disturbed by a neighbour's party?",
-    "topic": "Parties"
-  },
-  {
-    "part": 3,
-    "question": "Why do some people dislike parties?",
-    "topic": "Parties"
-  },
-  {
-    "part": 3,
-    "question": "What do adults do at parties?",
-    "topic": "Parties"
-  },
-  {
-    "part": 3,
-    "question": "How do people celebrate their personal events?",
-    "topic": "Parties"
-  },
-  {
-    "part": 3,
-    "question": "What do children do at a birthday party?",
-    "topic": "Parties"
-  },
-  {
-    "part": 3,
-    "question": "Do you think there were more family celebrations in the past than now?",
-    "topic": "Parties"
-  },
-  {
-    "part": 3,
-    "question": "Why do people organise family parties in your country?",
-    "topic": "Parties"
-  },
-  {
-    "part": 3,
-    "question": "Do people in your country like to hold parties?",
-    "topic": "Parties"
-  },
-  {
-    "part": 3,
-    "question": "Should parents spend a lot of money on their children's birthday parties?",
-    "topic": "Parties"
-  },
-  {
-    "part": 3,
-    "question": "Do you think people can make more friends if they often attend parties?",
-    "topic": "Parties"
-  },
-  {
-    "part": 3,
-    "question": "Is it worth spending money on celebrations?",
-    "topic": "Parties"
-  },
-  {
-    "part": 2,
-    "question": "Describe a plant (flower, vegetable or fruit) in your country. You should say: what plant it is, where it grows, why it is important for your country, why you like or dislike it.",
-    "topic": "Plants"
-  },
-  {
-    "part": 3,
-    "question": "What is the difference between living in the city and in the countryside?",
-    "topic": "Countryside"
-  },
-  {
-    "part": 3,
-    "question": "What are the features of living in the countryside?",
-    "topic": "Countryside"
-  },
-  {
-    "part": 3,
-    "question": "Why do many people move to the countryside?",
-    "topic": "Countryside"
-  },
-  {
-    "part": 3,
-    "question": "Why do some people prefer to live in the countryside?",
-    "topic": "Countryside"
-  },
-  {
-    "part": 3,
-    "question": "How do schools teach students to grow plants?",
-    "topic": "Plants"
-  },
-  {
-    "part": 3,
-    "question": "Have new kinds of plants been grown in your city recently?",
-    "topic": "Plants"
-  },
-  {
-    "part": 3,
-    "question": "Why do some people like to keep plants at home?",
-    "topic": "Plants"
-  }
-]
+{
+  "tests": [
+    {
+      "test_id": 1,
+      "name": "Test 1",
+      "parts": {
+        "1.1": {
+          "type": "interview",
+          "questions": [
+            "What's your favourite animal?",
+            "Have you ever had a pet?",
+            "What's the most popular animal in your country?"
+          ]
+        },
+        "1.2": {
+          "type": "picture_description",
+          "images": [
+            "https://picsum.photos/400/300?random=1",
+            "https://picsum.photos/400/300?random=2"
+          ],
+          "questions": [
+            "Describe what you see in the first picture.",
+            "What are the people doing in the second picture?",
+            "Compare the two pictures and explain which situation you prefer."
+          ]
+        },
+        "2": {
+          "type": "discussion",
+          "questions": [
+            "What makes a movie a blockbuster?",
+            "Are actors and actresses important to movies?",
+            "Do you think films with famous actors or actresses are more likely to become successful films?"
+          ]
+        },
+        "3": {
+          "type": "debate",
+          "topic": "Keeping pets in apartments should be banned",
+          "for_points": [
+            "Apartments are too small for most pets, which can lead to animal suffering and poor quality of life.",
+            "Pets in apartments can cause noise disturbances, allergic reactions, and hygiene issues for neighbours.",
+            "Many pet owners in apartments cannot provide adequate exercise and outdoor time for their animals."
+          ],
+          "against_points": [
+            "Pets provide emotional support and companionship, especially for people living alone in apartments.",
+            "Many small pets such as cats, hamsters, and fish are perfectly suited to apartment living.",
+            "Responsible pet ownership should be encouraged through education rather than outright bans."
+          ]
+        }
+      }
+    },
+    {
+      "test_id": 2,
+      "name": "Test 2",
+      "parts": {
+        "1.1": {
+          "type": "interview",
+          "questions": [
+            "What kind of food did you like when you were young?",
+            "What kinds of food do you particularly like?",
+            "What kinds of food are most popular in your country?"
+          ]
+        },
+        "1.2": {
+          "type": "picture_description",
+          "images": [
+            "https://picsum.photos/400/300?random=3",
+            "https://picsum.photos/400/300?random=4"
+          ],
+          "questions": [
+            "Describe what you see in the first picture.",
+            "What are the people doing in the second picture?",
+            "Compare the two pictures and explain which situation you prefer."
+          ]
+        },
+        "2": {
+          "type": "discussion",
+          "questions": [
+            "On what occasions would adults feel proud of themselves?",
+            "What would children do to make their parents proud?",
+            "Is it a good idea to reward children for doing homework or housework?"
+          ]
+        },
+        "3": {
+          "type": "debate",
+          "topic": "Fast food should be banned in schools",
+          "for_points": [
+            "Fast food is high in calories, sugar, and fat, contributing to childhood obesity and health problems.",
+            "Schools should set a healthy example and promote nutritious eating habits among students.",
+            "Banning fast food would encourage children to try healthier alternatives and develop better dietary choices."
+          ],
+          "against_points": [
+            "Banning fast food limits personal freedom and the right of students and parents to choose what to eat.",
+            "Fast food is affordable and convenient, making it accessible for families with limited budgets.",
+            "Education about balanced diets is more effective than bans, which may lead to unhealthy eating outside school."
+          ]
+        }
+      }
+    },
+    {
+      "test_id": 3,
+      "name": "Test 3",
+      "parts": {
+        "1.1": {
+          "type": "interview",
+          "questions": [
+            "Do you remember your dreams when you wake up?",
+            "Do you think dreams will affect life?",
+            "Do you think dreams have special meanings?"
+          ]
+        },
+        "1.2": {
+          "type": "picture_description",
+          "images": [
+            "https://picsum.photos/400/300?random=5",
+            "https://picsum.photos/400/300?random=6"
+          ],
+          "questions": [
+            "Describe what you see in the first picture.",
+            "What are the people doing in the second picture?",
+            "Compare the two pictures and explain which situation you prefer."
+          ]
+        },
+        "2": {
+          "type": "discussion",
+          "questions": [
+            "Do young and old people use phones in the same way?",
+            "What positive and negative effects do mobile phones have on friendship?",
+            "Do you think there should be laws on the use of mobile phones?"
+          ]
+        },
+        "3": {
+          "type": "debate",
+          "topic": "Mobile phones should be completely banned in schools",
+          "for_points": [
+            "Mobile phones distract students from learning and reduce their ability to concentrate in class.",
+            "Phone bans reduce cyberbullying and social media pressure during school hours.",
+            "Without phones, students interact more face-to-face, improving social skills and building stronger friendships."
+          ],
+          "against_points": [
+            "Mobile phones can be valuable educational tools, providing access to learning apps and online resources.",
+            "Students need their phones for safety reasons, such as contacting parents in emergencies.",
+            "Teaching students responsible phone usage is more beneficial than imposing a complete ban."
+          ]
+        }
+      }
+    },
+    {
+      "test_id": 4,
+      "name": "Test 4",
+      "parts": {
+        "1.1": {
+          "type": "interview",
+          "questions": [
+            "Do you like reading?",
+            "What books do you like to read?",
+            "What book did you read recently?"
+          ]
+        },
+        "1.2": {
+          "type": "picture_description",
+          "images": [
+            "https://picsum.photos/400/300?random=7",
+            "https://picsum.photos/400/300?random=8"
+          ],
+          "questions": [
+            "Describe what you see in the first picture.",
+            "What are the people doing in the second picture?",
+            "Compare the two pictures and explain which situation you prefer."
+          ]
+        },
+        "2": {
+          "type": "discussion",
+          "questions": [
+            "What are the advantages and disadvantages of being a famous child?",
+            "What can today's children do to become famous?",
+            "Do people become famous just because of their talent?"
+          ]
+        },
+        "3": {
+          "type": "debate",
+          "topic": "Social media makes people more famous than talent does",
+          "for_points": [
+            "Many social media influencers gain millions of followers without any traditional talent or skill.",
+            "Viral content and algorithms can make anyone famous overnight, regardless of their actual abilities.",
+            "Social media rewards attention-grabbing behaviour more than genuine talent or hard work."
+          ],
+          "against_points": [
+            "Truly talented individuals use social media as a platform to showcase their skills to a wider audience.",
+            "Social media fame is often short-lived, while talent-based fame tends to be more lasting and respected.",
+            "Many successful artists, musicians, and creators were discovered through social media because of their genuine talent."
+          ]
+        }
+      }
+    },
+    {
+      "test_id": 5,
+      "name": "Test 5",
+      "parts": {
+        "1.1": {
+          "type": "interview",
+          "questions": [
+            "What kind of gifts are popular in your country?",
+            "What's the best gift you have ever received?",
+            "What do you give others as gifts?"
+          ]
+        },
+        "1.2": {
+          "type": "picture_description",
+          "images": [
+            "https://picsum.photos/400/300?random=9",
+            "https://picsum.photos/400/300?random=10"
+          ],
+          "questions": [
+            "Describe what you see in the first picture.",
+            "What are the people doing in the second picture?",
+            "Compare the two pictures and explain which situation you prefer."
+          ]
+        },
+        "2": {
+          "type": "discussion",
+          "questions": [
+            "Why is it difficult for some people to relax?",
+            "Which is more important, mental relaxation or physical relaxation?",
+            "Do you think there should be classes for training young people and children how to relax?"
+          ]
+        },
+        "3": {
+          "type": "debate",
+          "topic": "Giving money as a gift is better than giving physical presents",
+          "for_points": [
+            "Money allows the recipient to buy exactly what they want or need, avoiding unwanted gifts.",
+            "It eliminates the stress and time spent on choosing the right present for someone.",
+            "Money is practical and can be saved or invested, providing long-term value beyond a single item."
+          ],
+          "against_points": [
+            "Physical gifts show more thought and effort, demonstrating that the giver truly knows the recipient.",
+            "Receiving a wrapped present creates excitement and emotional connection that money cannot replicate.",
+            "Giving money can feel impersonal and may suggest a lack of care or creativity on the part of the giver."
+          ]
+        }
+      }
+    },
+    {
+      "test_id": 6,
+      "name": "Test 6",
+      "parts": {
+        "1.1": {
+          "type": "interview",
+          "questions": [
+            "Do you walk a lot?",
+            "Did you often go outside to have a walk when you were a child?",
+            "Where would you like to take a long walk if you had the chance?"
+          ]
+        },
+        "1.2": {
+          "type": "picture_description",
+          "images": [
+            "https://picsum.photos/400/300?random=11",
+            "https://picsum.photos/400/300?random=12"
+          ],
+          "questions": [
+            "Describe what you see in the first picture.",
+            "What are the people doing in the second picture?",
+            "Compare the two pictures and explain which situation you prefer."
+          ]
+        },
+        "2": {
+          "type": "discussion",
+          "questions": [
+            "What are the differences between the technology of the past and that of today?",
+            "Does technological development have a negative impact on communication among people?",
+            "Do you think technology unites or separates people?"
+          ]
+        },
+        "3": {
+          "type": "debate",
+          "topic": "Technology brings people closer together",
+          "for_points": [
+            "Video calls and messaging apps allow people to maintain relationships across long distances.",
+            "Social media platforms help people find communities with shared interests regardless of location.",
+            "Technology enables collaboration between people in different countries, fostering global understanding."
+          ],
+          "against_points": [
+            "People spend more time on screens than engaging in meaningful face-to-face conversations.",
+            "Social media often creates superficial connections rather than deep, genuine relationships.",
+            "Over-reliance on technology can lead to social isolation and reduced real-world social skills."
+          ]
+        }
+      }
+    },
+    {
+      "test_id": 7,
+      "name": "Test 7",
+      "parts": {
+        "1.1": {
+          "type": "interview",
+          "questions": [
+            "Do you have any hobbies?",
+            "Do you have the same hobbies as your family members?",
+            "Did you have any hobbies when you were a child?"
+          ]
+        },
+        "1.2": {
+          "type": "picture_description",
+          "images": [
+            "https://picsum.photos/400/300?random=13",
+            "https://picsum.photos/400/300?random=14"
+          ],
+          "questions": [
+            "Describe what you see in the first picture.",
+            "What are the people doing in the second picture?",
+            "Compare the two pictures and explain which situation you prefer."
+          ]
+        },
+        "2": {
+          "type": "discussion",
+          "questions": [
+            "What is the right age for a child to learn drawing?",
+            "Why do most children draw more often than adults do?",
+            "Do you think galleries and museums should be free of charge?"
+          ]
+        },
+        "3": {
+          "type": "debate",
+          "topic": "Art education should be mandatory in all schools",
+          "for_points": [
+            "Art education develops creativity and critical thinking skills that benefit students in all areas of life.",
+            "Studying art helps children express emotions and improves their mental health and well-being.",
+            "Art education preserves cultural heritage and teaches students to appreciate diverse forms of expression."
+          ],
+          "against_points": [
+            "Schools have limited time and resources, which should be focused on core academic subjects.",
+            "Not all students are interested in art, and forcing them to study it may reduce their motivation.",
+            "Art can be pursued as an extracurricular activity, so making it mandatory is unnecessary."
+          ]
+        }
+      }
+    },
+    {
+      "test_id": 8,
+      "name": "Test 8",
+      "parts": {
+        "1.1": {
+          "type": "interview",
+          "questions": [
+            "How much time do you spend on these apps?",
+            "What kind of apps do you have on your phone?",
+            "What are the most and the least popular apps in your country?"
+          ]
+        },
+        "1.2": {
+          "type": "picture_description",
+          "images": [
+            "https://picsum.photos/400/300?random=15",
+            "https://picsum.photos/400/300?random=16"
+          ],
+          "questions": [
+            "Describe what you see in the first picture.",
+            "What are the people doing in the second picture?",
+            "Compare the two pictures and explain which situation you prefer."
+          ]
+        },
+        "2": {
+          "type": "discussion",
+          "questions": [
+            "Do you think learning many subjects at one time is better or learning one subject is better?",
+            "Do you think all teachers should have entertaining teaching styles?",
+            "Is it important for people to learn new skills all life long?"
+          ]
+        },
+        "3": {
+          "type": "debate",
+          "topic": "Children should be limited to 1 hour of app usage per day",
+          "for_points": [
+            "Excessive screen time has been linked to poor sleep, eye strain, and reduced physical activity in children.",
+            "Limiting app usage encourages children to engage in outdoor play, reading, and creative activities.",
+            "Time limits help prevent addiction to apps and social media, protecting children's mental health."
+          ],
+          "against_points": [
+            "Many educational apps help children learn and develop new skills, so strict limits may hinder their progress.",
+            "A rigid one-hour rule does not account for the different types of app usage, such as homework or creative projects.",
+            "Parents should have the freedom to set their own guidelines based on their child's individual needs."
+          ]
+        }
+      }
+    },
+    {
+      "test_id": 9,
+      "name": "Test 9",
+      "parts": {
+        "1.1": {
+          "type": "interview",
+          "questions": [
+            "Do you like to get up early?",
+            "What is your morning routine?",
+            "What do you usually do in the morning?"
+          ]
+        },
+        "1.2": {
+          "type": "picture_description",
+          "images": [
+            "https://picsum.photos/400/300?random=17",
+            "https://picsum.photos/400/300?random=18"
+          ],
+          "questions": [
+            "Describe what you see in the first picture.",
+            "What are the people doing in the second picture?",
+            "Compare the two pictures and explain which situation you prefer."
+          ]
+        },
+        "2": {
+          "type": "discussion",
+          "questions": [
+            "Do you think children should plan their future careers?",
+            "In general, do you think planning is important?",
+            "Should children ask their teachers or parents for advice when making plans?"
+          ]
+        },
+        "3": {
+          "type": "debate",
+          "topic": "Having a strict daily routine is essential for success",
+          "for_points": [
+            "A strict routine builds discipline and ensures that important tasks are completed consistently every day.",
+            "Successful people such as athletes and business leaders often credit their daily routines for their achievements.",
+            "Routines reduce decision fatigue, allowing people to focus their energy on meaningful and productive work."
+          ],
+          "against_points": [
+            "Creativity and innovation often come from flexibility and spontaneity, not rigid schedules.",
+            "A strict routine can lead to burnout and stress if there is no room for relaxation or unexpected events.",
+            "Many successful people thrive with adaptable schedules that allow them to respond to new opportunities."
+          ]
+        }
+      }
+    }
+  ]
+}

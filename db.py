@@ -1,5 +1,5 @@
 """
-Database helper functions for IELTS Speaking App.
+Database helper functions for Multilevel Speaking Practice App.
 Shared between bot (app.py) and web server (web_server.py).
 """
 import sqlite3
@@ -117,6 +117,18 @@ def migrate():
     except sqlite3.OperationalError:
         pass
 
+    # Add target_level column if not exists (CEFR level, replaces target_score conceptually)
+    try:
+        c.execute("ALTER TABLE user_settings ADD COLUMN target_level TEXT DEFAULT 'B2'")
+    except sqlite3.OperationalError:
+        pass
+
+    # Add debate_side column to responses (for Part 3 debate)
+    try:
+        c.execute("ALTER TABLE responses ADD COLUMN debate_side TEXT")
+    except sqlite3.OperationalError:
+        pass
+
     # Indexes
     c.execute("CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_attempts_attempt_time ON attempts(attempt_time)")
@@ -129,6 +141,21 @@ def migrate():
 
     conn.commit()
     conn.close()
+
+
+def score_to_cefr(score):
+    """Convert 0-75 score to CEFR level."""
+    if score is None:
+        return None
+    score = int(score)
+    if score >= 65:
+        return "C1"
+    elif score >= 51:
+        return "B2"
+    elif score >= 38:
+        return "B1"
+    else:
+        return "Below B1"
 
 
 # ─── User helpers ──────────────────────────────────────────────
@@ -186,7 +213,7 @@ def get_user_settings(user_id):
 
 
 def update_user_settings(user_id, **kwargs):
-    allowed = {"dark_mode", "notifications", "language", "daily_goal", "target_score"}
+    allowed = {"dark_mode", "notifications", "language", "daily_goal", "target_score", "target_level"}
     fields = {k: v for k, v in kwargs.items() if k in allowed}
     if not fields:
         return
@@ -203,7 +230,7 @@ def update_user_settings(user_id, **kwargs):
 
 # ─── Session helpers ───────────────────────────────────────────
 
-def create_session(user_id, session_type="practice", part=1):
+def create_session(user_id, session_type="practice", part="1.1"):
     conn = get_connection()
     c = conn.cursor()
     c.execute(

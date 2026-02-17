@@ -112,9 +112,9 @@ init_db()
 try:
     with open('questions.json', 'r', encoding='utf-8') as f:
         data = json.load(f)
-        QUESTIONS = data if isinstance(data, list) else data.get('questions', [])
-        if not QUESTIONS:
-            raise ValueError("❌ No questions found in questions.json")
+        TESTS = data.get('tests', [])
+        if not TESTS:
+            raise ValueError("No tests found in questions.json")
 except FileNotFoundError as e:
     logging.error("questions.json not found")
     raise SystemExit(e)
@@ -122,47 +122,26 @@ except FileNotFoundError as e:
 # Store user states
 user_states = {}
 
-# Group questions by theme
-def group_questions_by_related_to(questions):
-    grouped = {}
-    for question in questions:
-        related_to = question.get('related_to', 'default')
-        if related_to not in grouped:
-            grouped[related_to] = {'part1': [], 'part2': [], 'part3': []}
-        part = question.get('part')
-        if part == 1:
-            grouped[related_to]['part1'].append(question)
-        elif part == 2:
-            grouped[related_to]['part2'].append(question)
-        elif part == 3:
-            grouped[related_to]['part3'].append(question)
-    return grouped
-
 # Initialize user state
 def initialize_user_state():
-    grouped_questions = group_questions_by_related_to(QUESTIONS)
-    available_groups = [g for g in grouped_questions if grouped_questions[g]['part2'] and grouped_questions[g]['part3']]
-    if not available_groups:
-        raise ValueError("❌ No valid groups with Part 2 and Part 3 questions")
+    if not TESTS:
+        raise ValueError("No tests available")
 
-    all_part1_questions = [q for q in QUESTIONS if q.get('part') == 1]
-    if not all_part1_questions:
-        raise ValueError("❌ No Part 1 questions")
-
-    selected_group = random.choice(available_groups)
-    part2_questions = grouped_questions[selected_group]['part2']
-    part3_questions = grouped_questions[selected_group]['part3']
+    selected_test = random.choice(TESTS)
+    parts = selected_test["parts"]
 
     return {
-        "part": 1,
+        "part": "1.1",
         "question_index": 0,
         "answers": [],
+        "selected_test": selected_test,
         "selected_questions": {
-            1: random.sample(all_part1_questions, min(5, len(all_part1_questions))),
-            2: [random.choice(part2_questions)] if part2_questions else [],
-            3: random.sample(part3_questions, min(4, len(part3_questions))) if part3_questions else []
+            "1.1": parts["1.1"]["questions"],
+            "1.2": parts["1.2"]["questions"],
+            "2": parts["2"]["questions"],
+            "3": []  # Part 3 is debate, handled separately
         },
-        "selected_group": selected_group,
+        "debate_side": None,
         "start_time": datetime.utcnow(),
         "timeout_task": None
     }
@@ -279,7 +258,7 @@ async def check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE)
             keyboard = [[KeyboardButton("Start Exam")]]
             reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
             await update.effective_message.reply_text(
-                "🎤 Welcome to IELTS Speaking Practice! Click 'Start Exam'.",
+                "🎤 Welcome to Multilevel Speaking Practice! Click 'Start Exam'.",
                 reply_markup=reply_markup
             )
             # Also show Open App button if WEBAPP_URL is set
@@ -374,7 +353,7 @@ async def start_exam(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_states[user_id]["timeout_task"] = timeout_task
     asyncio.create_task(timeout_exam_after_sleep(user_id, context, timeout_task))
 
-    await update.message.reply_text("📝 IELTS Speaking exam started! 30 minutes to complete.")
+    await update.message.reply_text("📝 Multilevel Speaking exam started! 30 minutes to complete.")
     await send_next_question(update, context)
     logging.info(f"User {user_id} started exam (Attempt {attempts + 1}/{max_attempts})")
 
@@ -389,34 +368,65 @@ async def send_next_question(update: Update, context: ContextTypes.DEFAULT_TYPE)
     state = user_states.get(user_id)
 
     if not state:
-        await update.message.reply_text("❌ Start exam using /start.")
+        await update.message.reply_text("Start exam using /start.")
         return
 
     part = state["part"]
     index = state["question_index"]
     questions = state["selected_questions"].get(part, [])
+    test = state["selected_test"]
 
-    if not questions:
-        await update.message.reply_text(f"❌ No questions for Part {part}.")
+    # Part flow: 1.1 -> 1.2 -> 2 -> 3
+    part_order = ["1.1", "1.2", "2", "3"]
+
+    if part == "3":
+        # Debate part - show debate table and ask user to speak
+        debate_data = test["parts"]["3"]
+        if not state.get("debate_shown"):
+            state["debate_shown"] = True
+            debate_msg = (
+                f"Part 3 - Debate\n\n"
+                f"Topic: {debate_data['topic']}\n\n"
+                f"FOR:\n" + "\n".join(f"  + {p}" for p in debate_data['for_points']) + "\n\n"
+                f"AGAINST:\n" + "\n".join(f"  - {p}" for p in debate_data['against_points']) + "\n\n"
+                f"Choose a side and argue your position. You have 120 seconds."
+            )
+            await update.message.reply_text(debate_msg)
+            if audio_buffer := text_to_speech(f"The debate topic is: {debate_data['topic']}. Choose a side, for or against, and argue your position."):
+                await update.message.reply_voice(voice=audio_buffer, caption="Audio for debate topic")
+        else:
+            # Debate response already given, end exam
+            if state["timeout_task"]:
+                state["timeout_task"].cancel()
+            await provide_feedback(update, context)
         return
 
     if index < len(questions):
-        question = questions[index]['question']
-        await update.message.reply_text(f"📋 Part {part}, Question {index + 1}:\n{question}")
+        question = questions[index]
+
+        # For Part 1.2, send images before first question
+        if part == "1.2" and index == 0:
+            images = test["parts"]["1.2"].get("images", [])
+            for img_url in images:
+                try:
+                    await update.message.reply_photo(photo=img_url, caption=f"Picture for Part 1.2")
+                except Exception as e:
+                    logging.error(f"Failed to send image: {e}")
+
+        await update.message.reply_text(f"Part {part}, Question {index + 1}:\n{question}")
 
         if audio_buffer := text_to_speech(question):
             await update.message.reply_voice(
                 voice=audio_buffer,
-                caption=f"🎧 Audio for Question {index + 1} (Part {part})"
+                caption=f"Audio for Question {index + 1} (Part {part})"
             )
-
-        if part == 2:
-            await update.message.reply_text("⏱️ 1 minute to prepare, 1-2 minutes to speak.")
     else:
-        if part < 3:
-            state["part"] += 1
+        # Move to next part
+        current_idx = part_order.index(part)
+        if current_idx < len(part_order) - 1:
+            state["part"] = part_order[current_idx + 1]
             state["question_index"] = 0
-            await update.message.reply_text(f"➡️ Moving to Part {state['part']}...")
+            await update.message.reply_text(f"Moving to Part {state['part']}...")
             await send_next_question(update, context)
         else:
             if state["timeout_task"]:
@@ -440,7 +450,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         duration = voice.duration
         current_part = state["part"]
 
-        time_limits = {1: 30, 2: 120, 3: 60}
+        time_limits = {"1.1": 30, "1.2": 30, "2": 60, "3": 120}
         allowed_time = time_limits[current_part]
 
         if duration < 5:
@@ -492,18 +502,22 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.info(f"User {user_id}: FFmpeg conversion completed at {datetime.utcnow().isoformat()}")
 
         try:
-            current_question = state["selected_questions"][current_part][state["question_index"]]['question']
+            if current_part == "3":
+                current_question = state["selected_test"]["parts"]["3"]["topic"]
+            else:
+                current_question = state["selected_questions"][current_part][state["question_index"]]
             initial_prompt = {
-                1: f"Response to IELTS Part 1 question: {current_question}",
-                2: f"Response to IELTS Part 2 question, likely in Tashkent, Uzbekistan: {current_question}",
-                3: f"Response to IELTS Part 3 question: {current_question}"
-            }.get(current_part, f"Response to IELTS question: {current_question}")
+                "1.1": f"Response to Multilevel Part 1.1 interview question: {current_question}",
+                "1.2": f"Response to Multilevel Part 1.2 picture description question: {current_question}",
+                "2": f"Response to Multilevel Part 2 discussion question: {current_question}",
+                "3": f"Response to Multilevel Part 3 debate: {current_question}"
+            }.get(current_part, f"Response to Multilevel question: {current_question}")
 
             logging.info(f"User {user_id}: Starting transcription at {datetime.utcnow().isoformat()}")
             with open(wav_path, "rb") as audio_file:
                 result = groq_client.audio.transcriptions.create(
                     file=(wav_path, audio_file.read()),
-                    model="whisper-large-v3",
+                    model="whisper-large-v3-turbo",
                     language="en",
                     prompt=initial_prompt,
                 )
@@ -563,72 +577,6 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.error(f"Voice processing error for user {user_id}: {str(e)}")
         await update.message.reply_text("❌ Failed to process response.")
 
-# Adjust IELTS scores
-def adjust_score(score):
-    try:
-        score = float(score)
-        if 0 <= score <= 3.5:
-            return score
-        elif 3.5 < score <= 6:
-            return min(score + 0.5, 9)
-        else:
-            return score
-    except (ValueError, TypeError):
-        return score
-
-# Adjust feedback scores
-def adjust_feedback_scores(feedback_text, user_id):
-    # Extract criterion scores
-    criteria = {
-        'Fluency and Coherence': None,
-        'Lexical Resource': None,
-        'Grammatical Range and Accuracy': None,
-        'Pronunciation': None
-    }
-    for criterion in criteria:
-        match = re.search(rf'{criterion}: (\d+\.?\d?)', feedback_text)
-        if match:
-            criteria[criterion] = float(match.group(1))
-
-    # Adjust criterion scores
-    for criterion in criteria:
-        if criteria[criterion] is not None:
-            adjusted = adjust_score(criteria[criterion])
-            logging.info(f"User {user_id}: Adjusting {criterion} from {criteria[criterion]} to {adjusted}")
-            criteria[criterion] = adjusted
-
-    # Enforce Grammar 0.5 or 1 lower than Lexical Resource
-    if criteria['Lexical Resource'] is not None and criteria['Grammatical Range and Accuracy'] is not None:
-        lexical = criteria['Lexical Resource']
-        grammar = criteria['Grammatical Range and Accuracy']
-        if grammar >= lexical:
-            new_grammar = max(lexical - 1, lexical - 0.5)
-            logging.info(
-                f"User {user_id}: Adjusting Grammar from {grammar} to {new_grammar} to be 0.5/1 below Lexical {lexical}")
-            criteria['Grammatical Range and Accuracy'] = new_grammar
-
-    # Calculate Overall Band Score as arithmetic mean, rounded to nearest 0.5
-    if all(score is not None for score in criteria.values()):
-        overall_score = sum(criteria.values()) / 4
-        overall_score = round(overall_score * 2) / 2  # Round to nearest 0.5
-        overall_score = min(max(overall_score, 0), 9)  # Cap between 0 and 9
-        logging.info(f"User {user_id}: Calculated Overall Band Score: {overall_score}")
-    else:
-        overall_score = None
-        logging.warning(f"User {user_id}: Could not calculate Overall Band Score due to missing criterion scores")
-
-    # Replace scores in feedback text
-    for criterion, score in criteria.items():
-        if score is not None:
-            score_str = f"{score:.1f}" if score % 1 != 0 else f"{int(score)}"
-            feedback_text = re.sub(rf'{criterion}: \d+\.?\d?', f'{criterion}: {score_str}', feedback_text)
-
-    if overall_score is not None:
-        overall_str = f"{overall_score:.1f}" if overall_score % 1 != 0 else f"{int(overall_score)}"
-        feedback_text = re.sub(r'Overall Band Score: \d+\.?\d?', f'Overall Band Score: {overall_str}', feedback_text)
-
-    return feedback_text
-
 # Generate feedback
 async def provide_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
@@ -651,24 +599,25 @@ async def provide_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Check for incomplete test (no Part 2 or beyond)
-    reached_part2 = any(answer['part'] >= 2 for answer in answers)
+    reached_part2 = any(answer['part'] in ["2", "1.2", "3"] for answer in answers)
     # Check for short responses (5-8 seconds)
     has_short_response = any(5 <= answer['duration'] <= 8 for answer in answers)
 
     if not reached_part2:
         feedback = (
-            "📊 **Exam Feedback:**\n"
-            "Overall Band Score: 1.5\n"
-            "The candidate did not complete the exam, failing to progress beyond Part 1, which severely limits assessment. "
+            "Exam Feedback:\n"
+            "Overall Score: 10/75\n"
+            "CEFR Level: Below B1\n"
+            "The candidate did not complete the exam, failing to progress beyond Part 1.1, which severely limits assessment. "
             "Responses provided were insufficient to demonstrate adequate language skills. "
             "Further practice and full participation are strongly recommended.\n"
-            "Fluency and Coherence: 1.5\n"
-            "The candidate’s limited responses lacked coherence due to incomplete participation.\n"
-            "Lexical Resource: 1.5\n"
+            "Fluency and Coherence: 10/75\n"
+            "The candidate's limited responses lacked coherence due to incomplete participation.\n"
+            "Lexical Resource: 10/75\n"
             "Vocabulary could not be adequately assessed due to insufficient responses.\n"
-            "Grammatical Range and Accuracy: 1.0\n"
-            "Grammar was not sufficiently demonstrated due to the absence of responses beyond Part 1.\n"
-            "Pronunciation: 1.5\n"
+            "Grammatical Range and Accuracy: 8/75\n"
+            "Grammar was not sufficiently demonstrated due to the absence of responses beyond Part 1.1.\n"
+            "Pronunciation: 10/75\n"
             "Pronunciation was not adequately assessable due to limited speech input."
         )
         logging.info(f"User {user_id}: Low scores assigned due to incomplete test (no Part 2)")
@@ -683,18 +632,19 @@ async def provide_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if has_short_response:
         feedback = (
-            "📊 **Exam Feedback:**\n"
-            "Overall Band Score: 1.5\n"
-            "The candidate’s responses were extremely brief, lasting only 5-8 seconds, which severely limits assessment. "
+            "Exam Feedback:\n"
+            "Overall Score: 10/75\n"
+            "CEFR Level: Below B1\n"
+            "The candidate's responses were extremely brief, lasting only 5-8 seconds, which severely limits assessment. "
             "This brevity prevented a thorough evaluation of language skills. "
             "Longer responses are needed to demonstrate proficiency.\n"
-            "Fluency and Coherence: 1.5\n"
+            "Fluency and Coherence: 10/75\n"
             "Responses were too short to assess fluency or coherence effectively.\n"
-            "Lexical Resource: 1.5\n"
+            "Lexical Resource: 10/75\n"
             "Limited speech duration restricted vocabulary assessment.\n"
-            "Grammatical Range and Accuracy: 1.0\n"
+            "Grammatical Range and Accuracy: 8/75\n"
             "Grammar was not sufficiently demonstrated due to very short responses.\n"
-            "Pronunciation: 1.5\n"
+            "Pronunciation: 10/75\n"
             "Pronunciation was minimally assessable due to brief responses."
         )
         logging.info(f"User {user_id}: Low scores assigned due to short responses (5-8s)")
@@ -708,16 +658,14 @@ async def provide_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     prompt = (
-        "You are a certified IELTS Speaking examiner. Analyze the following responses based on:\n"
-        "1. Fluency and Coherence: Assess logical flow and idea connection, penalizing major disruptions.\n"
-        "2. Lexical Resource: Evaluate vocabulary appropriateness, rewarding topic-specific terms.\n"
-        "3. Grammatical Range and Accuracy: Prioritize detecting major grammatical errors (e.g., verb forms, sentence fragments); score 0.5 or 1 point lower than Lexical Resource.\n"
-        "4. Pronunciation: Judge based on transcription clarity, noting accent-related errors.\n"
+        "You are a certified Multilevel Speaking examiner. Analyze the following responses based on:\n"
+        "1. Fluency and Coherence\n2. Lexical Resource\n"
+        "3. Grammatical Range and Accuracy\n4. Pronunciation\n"
+        "Score each criterion on 0-75 integer scale.\n"
+        "CEFR: C1(65-75), B2(51-64), B1(38-50), Below B1(0-37)\n"
         "Provide:\n"
-        "- Overall Band Score (0-9, half-points) with a three-sentence comment summarizing performance.\n"
-        "- One set of scores (0-9, half-points) for Fluency and Coherence, Lexical Resource, Grammatical Range and Accuracy, and Pronunciation, each with a one-sentence comment.\n"
-        "Scores 0-3.5 should reflect true performance, 3.5-7 should be generous (add points), capped at 9.\n"
-        "Consider duration only if too short (Part 1: <10s, Part 2: <30s, Part 3: <15s) or too long (Part 1: >30s, Part 2: >120s, Part 3: >60s).\n"
+        "- Overall Score (0-75) with CEFR level and a three-sentence summary.\n"
+        "- Scores for each criterion with a one-sentence comment.\n"
         "Responses:\n"
     )
 
@@ -733,19 +681,18 @@ async def provide_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         response = openai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a certified IELTS Speaking examiner."},
+                {"role": "system", "content": "You are a certified Multilevel Speaking examiner."},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=500,
             temperature=0.5
         )
         feedback = response.choices[0].message.content
-        adjusted_feedback = adjust_feedback_scores(feedback, user_id)
 
-        final_feedback = "📊 **Exam Feedback:**\n" + adjusted_feedback
+        final_feedback = "Exam Feedback:\n" + feedback
         await update.message.reply_text(final_feedback, parse_mode="Markdown")
 
-        if audio_buffer := text_to_speech(adjusted_feedback):
+        if audio_buffer := text_to_speech(feedback):
             await update.message.reply_voice(
                 voice=audio_buffer,
                 caption="🎧 Audio feedback"
@@ -782,24 +729,25 @@ async def provide_feedback_for_timeout(user_id, context: ContextTypes.DEFAULT_TY
         return
 
     # Check for incomplete test (no Part 2 or beyond)
-    reached_part2 = any(answer['part'] >= 2 for answer in answers)
+    reached_part2 = any(answer['part'] in ["2", "1.2", "3"] for answer in answers)
     # Check for short responses (5-8 seconds)
     has_short_response = any(5 <= answer['duration'] <= 8 for answer in answers)
 
     if not reached_part2:
         feedback = (
-            "📊 **Exam Feedback (Incomplete due to Timeout):**\n"
-            "Overall Band Score: 1.5\n"
-            "The candidate did not complete the exam, failing to progress beyond Part 1, which severely limits assessment. "
+            "Exam Feedback (Incomplete due to Timeout):\n"
+            "Overall Score: 10/75\n"
+            "CEFR Level: Below B1\n"
+            "The candidate did not complete the exam, failing to progress beyond Part 1.1, which severely limits assessment. "
             "Responses provided were insufficient to demonstrate adequate language skills. "
             "Further practice and full participation are strongly recommended.\n"
-            "Fluency and Coherence: 1.5\n"
-            "The candidate’s limited responses lacked coherence due to incomplete participation.\n"
-            "Lexical Resource: 1.5\n"
+            "Fluency and Coherence: 10/75\n"
+            "The candidate's limited responses lacked coherence due to incomplete participation.\n"
+            "Lexical Resource: 10/75\n"
             "Vocabulary could not be adequately assessed due to insufficient responses.\n"
-            "Grammatical Range and Accuracy: 1.0\n"
-            "Grammar was not sufficiently demonstrated due to the absence of responses beyond Part 1.\n"
-            "Pronunciation: 1.5\n"
+            "Grammatical Range and Accuracy: 8/75\n"
+            "Grammar was not sufficiently demonstrated due to the absence of responses beyond Part 1.1.\n"
+            "Pronunciation: 10/75\n"
             "Pronunciation was not adequately assessable due to limited speech input."
         )
         logging.info(f"User {user_id}: Low scores assigned due to incomplete test (no Part 2, timeout)")
@@ -814,18 +762,19 @@ async def provide_feedback_for_timeout(user_id, context: ContextTypes.DEFAULT_TY
 
     if has_short_response:
         feedback = (
-            "📊 **Exam Feedback (Incomplete due to Timeout):**\n"
-            "Overall Band Score: 1.5\n"
-            "The candidate’s responses were extremely brief, lasting only 5-8 seconds, which severely limits assessment. "
+            "Exam Feedback (Incomplete due to Timeout):\n"
+            "Overall Score: 10/75\n"
+            "CEFR Level: Below B1\n"
+            "The candidate's responses were extremely brief, lasting only 5-8 seconds, which severely limits assessment. "
             "This brevity prevented a thorough evaluation of language skills. "
             "Longer responses are needed to demonstrate proficiency.\n"
-            "Fluency and Coherence: 1.5\n"
+            "Fluency and Coherence: 10/75\n"
             "Responses were too short to assess fluency or coherence effectively.\n"
-            "Lexical Resource: 1.5\n"
+            "Lexical Resource: 10/75\n"
             "Limited speech duration restricted vocabulary assessment.\n"
-            "Grammatical Range and Accuracy: 1.0\n"
+            "Grammatical Range and Accuracy: 8/75\n"
             "Grammar was not sufficiently demonstrated due to very short responses.\n"
-            "Pronunciation: 1.5\n"
+            "Pronunciation: 10/75\n"
             "Pronunciation was minimally assessable due to brief responses."
         )
         logging.info(f"User {user_id}: Low scores assigned due to short responses (5-8s, timeout)")
@@ -839,17 +788,15 @@ async def provide_feedback_for_timeout(user_id, context: ContextTypes.DEFAULT_TY
         return
 
     prompt = (
-        "You are a certified IELTS Speaking examiner. Analyze the following responses based on:\n"
-        "1. Fluency and Coherence: Assess logical flow and idea connection, penalizing major disruptions.\n"
-        "2. Lexical Resource: Evaluate vocabulary appropriateness, rewarding topic-specific terms.\n"
-        "3. Grammatical Range and Accuracy: Prioritize detecting major grammatical errors (e.g., verb forms, sentence fragments); score 0.5 or 1 point lower than Lexical Resource.\n"
-        "4. Pronunciation: Judge based on transcription clarity, noting accent-related errors.\n"
+        "You are a certified Multilevel Speaking examiner. Analyze the following responses based on:\n"
+        "1. Fluency and Coherence\n2. Lexical Resource\n"
+        "3. Grammatical Range and Accuracy\n4. Pronunciation\n"
+        "Score each criterion on 0-75 integer scale.\n"
+        "CEFR: C1(65-75), B2(51-64), B1(38-50), Below B1(0-37)\n"
         "Note: Exam timed out (30 minutes), so responses may be incomplete.\n"
         "Provide:\n"
-        "- Overall Band Score (0-9, half-points) with a three-sentence comment summarizing performance, noting incomplete exam.\n"
-        "- One set of scores (0-9, half-points) for Fluency and Coherence, Lexical Resource, Grammatical Range and Accuracy, and Pronunciation, each with a one-sentence comment.\n"
-        "Scores 0-3.5 should reflect true performance, 3.5-7 should be generous (add points), capped at 9.\n"
-        "Consider duration only if too short (Part 1: <10s, Part 2: <30s, Part 3: <15s) or too long (Part 1: >30s, Part 2: >120s, Part 3: >60s).\n"
+        "- Overall Score (0-75) with CEFR level and a three-sentence summary, noting incomplete exam.\n"
+        "- Scores for each criterion with a one-sentence comment.\n"
         "Responses:\n"
     )
 
@@ -865,18 +812,17 @@ async def provide_feedback_for_timeout(user_id, context: ContextTypes.DEFAULT_TY
         response = openai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a certified IELTS Speaking examiner."},
+                {"role": "system", "content": "You are a certified Multilevel Speaking examiner."},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=500,
             temperature=0.5
         )
         feedback = response.choices[0].message.content
-        adjusted_feedback = adjust_feedback_scores(feedback, user_id)
-        final_feedback = "📊 **Exam Feedback (Incomplete due to Timeout):**\n" + adjusted_feedback
+        final_feedback = "Exam Feedback (Incomplete due to Timeout):\n" + feedback
         await context.bot.send_message(chat_id=user_id, text=final_feedback, parse_mode="Markdown")
 
-        if audio_buffer := text_to_speech(adjusted_feedback):
+        if audio_buffer := text_to_speech(feedback):
             await context.bot.send_voice(
                 chat_id=user_id,
                 voice=audio_buffer,

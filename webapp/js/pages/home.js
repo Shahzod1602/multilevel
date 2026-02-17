@@ -25,20 +25,25 @@ const HomePage = {
 
             <div class="section-title">Practice Speaking</div>
             <div class="practice-cards">
-                <div class="practice-card" data-action="practice" data-part="1">
-                    <div class="icon purple">1</div>
-                    <h3>Part 1</h3>
-                    <span class="text-xs text-secondary">Introduction</span>
+                <div class="practice-card" data-action="practice" data-part="1.1">
+                    <div class="icon purple">1.1</div>
+                    <h3>Part 1.1</h3>
+                    <span class="text-xs text-secondary">Interview</span>
+                </div>
+                <div class="practice-card" data-action="practice" data-part="1.2">
+                    <div class="icon green">1.2</div>
+                    <h3>Part 1.2</h3>
+                    <span class="text-xs text-secondary">Pictures</span>
                 </div>
                 <div class="practice-card" data-action="practice" data-part="2">
-                    <div class="icon green">2</div>
+                    <div class="icon orange">2</div>
                     <h3>Part 2</h3>
-                    <span class="text-xs text-secondary">Long Turn</span>
+                    <span class="text-xs text-secondary">Discussion</span>
                 </div>
                 <div class="practice-card" data-action="practice" data-part="3">
-                    <div class="icon orange">3</div>
+                    <div class="icon blue">3</div>
                     <h3>Part 3</h3>
-                    <span class="text-xs text-secondary">Discussion</span>
+                    <span class="text-xs text-secondary">Debate</span>
                 </div>
             </div>
 
@@ -62,7 +67,7 @@ const HomePage = {
                 <div class="feature-card" data-action="scoring">
                     <div class="icon" style="background:#DBEAFE;font-size:20px">&#127942;</div>
                     <h3>Scoring Guide</h3>
-                    <p>Band descriptors</p>
+                    <p>CEFR levels</p>
                 </div>
                 <div class="feature-card" data-action="history">
                     <div class="icon" style="background:#E8DAEF;font-size:20px">&#128218;</div>
@@ -75,7 +80,7 @@ const HomePage = {
         // Practice card clicks
         container.querySelectorAll('.practice-card').forEach(card => {
             card.addEventListener('click', () => {
-                const part = parseInt(card.dataset.part);
+                const part = card.dataset.part;
                 App.navigate('practice', { part });
             });
         });

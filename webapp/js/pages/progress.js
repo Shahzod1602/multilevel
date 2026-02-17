@@ -2,6 +2,17 @@
  * Progress page — weekly calendar, streak, chart, stats.
  */
 const ProgressPage = {
+    cefrBadge(score) {
+        if (score == null) return '';
+        score = Math.round(score);
+        let level, cls;
+        if (score >= 65) { level = 'C1'; cls = 'c1'; }
+        else if (score >= 51) { level = 'B2'; cls = 'b2'; }
+        else if (score >= 38) { level = 'B1'; cls = 'b1'; }
+        else { level = 'Below B1'; cls = 'below-b1'; }
+        return `<span class="cefr-badge ${cls}">${level}</span>`;
+    },
+
     async render(container) {
         container.innerHTML = `<div class="loading"><div class="spinner"></div><span>Loading progress...</span></div>`;
 
@@ -40,6 +51,11 @@ const ProgressPage = {
                 };
             });
 
+            // Target level mapping
+            const targetLevel = streak.target_level || 'B2';
+            const targetScoreMap = { 'C1': 65, 'B2': 51, 'B1': 38, 'Below B1': 0 };
+            const targetScore = targetScoreMap[targetLevel] || 51;
+
             container.innerHTML = `
                 <h2>Your Progress</h2>
 
@@ -65,21 +81,21 @@ const ProgressPage = {
                 ${streak.average_score != null ? `
                 <div class="target-card">
                     <div class="target-header">
-                        <span>Band Score Progress</span>
+                        <span>Score Progress</span>
                     </div>
                     <div class="target-scores">
                         <div class="target-actual">
-                            <div class="target-score-value">${streak.average_score.toFixed(1)}</div>
-                            <div class="target-score-label">Current Avg</div>
+                            <div class="target-score-value">${Math.round(streak.average_score)}</div>
+                            <div class="target-score-label">Current Avg ${this.cefrBadge(streak.average_score)}</div>
                         </div>
-                        <div class="target-arrow">${streak.average_score >= streak.target_score ? '&#10003;' : '&#8594;'}</div>
+                        <div class="target-arrow">${streak.average_score >= targetScore ? '&#10003;' : '&#8594;'}</div>
                         <div class="target-goal">
-                            <div class="target-score-value">${(streak.target_score || 6.5).toFixed(1)}</div>
-                            <div class="target-score-label">Target</div>
+                            <div class="target-score-value">${targetScore}</div>
+                            <div class="target-score-label">Target ${this.cefrBadge(targetScore)}</div>
                         </div>
                     </div>
                     <div class="target-progress-bar">
-                        <div class="target-progress-fill" style="width: ${Math.min(100, Math.round((streak.average_score / (streak.target_score || 6.5)) * 100))}%"></div>
+                        <div class="target-progress-fill" style="width: ${Math.min(100, Math.round((streak.average_score / 75) * 100))}%"></div>
                     </div>
                 </div>
                 ` : ''}
@@ -113,7 +129,7 @@ const ProgressPage = {
 
         const rows = sessions.map(s => {
             const date = s.completed_at ? new Date(s.completed_at).toLocaleDateString() : '-';
-            const score = s.score_overall != null ? s.score_overall.toFixed(1) : '-';
+            const score = s.score_overall != null ? Math.round(s.score_overall) : '-';
             return `
                 <div class="settings-item">
                     <div class="left">

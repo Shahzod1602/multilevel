@@ -10,6 +10,17 @@ const HistoryPage = {
         await this.renderList(container);
     },
 
+    cefrBadge(score) {
+        if (score == null) return '';
+        score = Math.round(score);
+        let level, cls;
+        if (score >= 65) { level = 'C1'; cls = 'c1'; }
+        else if (score >= 51) { level = 'B2'; cls = 'b2'; }
+        else if (score >= 38) { level = 'B1'; cls = 'b1'; }
+        else { level = 'Below B1'; cls = 'below-b1'; }
+        return `<span class="cefr-badge ${cls}">${level}</span>`;
+    },
+
     async renderList(container) {
         container.innerHTML = `<div class="loading"><div class="spinner"></div><span>Loading history...</span></div>`;
 
@@ -34,7 +45,7 @@ const HistoryPage = {
 
             const rows = sessions.map(s => {
                 const date = s.completed_at ? new Date(s.completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '-';
-                const score = s.score_overall != null ? s.score_overall.toFixed(1) : '-';
+                const score = s.score_overall != null ? Math.round(s.score_overall) : '-';
                 const typeLabel = s.type === 'mock' ? 'Mock Test' : `Part ${s.part}`;
                 return `
                     <div class="history-item" data-session-id="${s.id}">
@@ -45,7 +56,10 @@ const HistoryPage = {
                                 <div class="text-xs text-secondary">${date}</div>
                             </div>
                         </div>
-                        <div class="history-score">${score}</div>
+                        <div style="display:flex;align-items:center;gap:8px">
+                            <div class="history-score">${score}</div>
+                            ${this.cefrBadge(s.score_overall)}
+                        </div>
                     </div>
                 `;
             }).join('');
@@ -85,6 +99,7 @@ const HistoryPage = {
             const s = await API.get(`/api/history/${sessionId}`);
             const date = s.completed_at ? new Date(s.completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
             const typeLabel = s.type === 'mock' ? 'Mock Test' : `Part ${s.part} Practice`;
+            const overall = Math.round(s.score_overall || 0);
 
             const responsesHtml = (s.responses || []).map((r, i) => `
                 <div class="history-response">
@@ -104,24 +119,24 @@ const HistoryPage = {
 
                 <div class="results-card">
                     <div class="score-main">
-                        <div class="score">${(s.score_overall || 0).toFixed(1)}</div>
-                        <div class="label">Overall Band Score</div>
+                        <div class="score">${overall}</div>
+                        <div class="label">Overall Score ${this.cefrBadge(s.score_overall)}</div>
                     </div>
                     <div class="score-breakdown">
                         <div class="score-item">
-                            <div class="value">${(s.score_fluency || 0).toFixed(1)}</div>
+                            <div class="value">${Math.round(s.score_fluency || 0)}</div>
                             <div class="name">Fluency</div>
                         </div>
                         <div class="score-item">
-                            <div class="value">${(s.score_lexical || 0).toFixed(1)}</div>
+                            <div class="value">${Math.round(s.score_lexical || 0)}</div>
                             <div class="name">Lexical</div>
                         </div>
                         <div class="score-item">
-                            <div class="value">${(s.score_grammar || 0).toFixed(1)}</div>
+                            <div class="value">${Math.round(s.score_grammar || 0)}</div>
                             <div class="name">Grammar</div>
                         </div>
                         <div class="score-item">
-                            <div class="value">${(s.score_pronunciation || 0).toFixed(1)}</div>
+                            <div class="value">${Math.round(s.score_pronunciation || 0)}</div>
                             <div class="name">Pronunciation</div>
                         </div>
                     </div>
