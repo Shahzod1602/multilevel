@@ -1,0 +1,11 @@
+python-telegram-bot>=20.0
+openai>=1.0.0
+groq
+python-dotenv
+gTTS
+aiohttp
+apscheduler
+fastapi
+uvicorn[standard]
+python-multipart
+edge-tts

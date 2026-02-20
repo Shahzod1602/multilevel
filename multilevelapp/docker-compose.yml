@@ -1,0 +1,16 @@
+services:
+  app:
+    build: .
+    container_name: multilevel-app
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./bot.db:/app/bot.db
+    ports:
+      - "8000:8000"
+    networks:
+      - ieltspeakapp_web
+
+networks:
+  ieltspeakapp_web:
+    external: true

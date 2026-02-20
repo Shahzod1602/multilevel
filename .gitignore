@@ -1,0 +1,8 @@
+.env
+*.log
+__pycache__/
+*.pyc
+ads/
+user_*_responses.json
+bot.db
+.claude/
