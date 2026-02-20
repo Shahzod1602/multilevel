@@ -17,6 +17,11 @@ jobs:
           script: |
             cd /opt/multilevelapp
             git pull origin main
+            # Copy updated files from multilevelapp/ to server root
+            cp -r multilevelapp/app.py multilevelapp/db.py multilevelapp/web_server.py multilevelapp/run.py multilevelapp/requirements.txt multilevelapp/Dockerfile multilevelapp/docker-compose.yml multilevelapp/questions.json .
+            cp -r multilevelapp/webapp/* webapp/
+            cp -r multilevelapp/nginx/conf.d/* nginx/conf.d/
             docker compose build --no-cache
             docker compose up -d
+            docker exec ielts-nginx nginx -s reload || true
             docker system prune -f
