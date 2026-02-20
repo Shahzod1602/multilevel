@@ -5,4 +5,5 @@ __pycache__/
 ads/
 user_*_responses.json
 bot.db
+venv/
 .claude/
