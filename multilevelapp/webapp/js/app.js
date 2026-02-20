@@ -103,7 +103,22 @@ const App = {
         });
     },
 
-    navigate(page, params = {}) {
+    async navigate(page, params = {}) {
+        // Re-check subscription on every navigation
+        try {
+            const subData = await API.get('/api/check-subscription');
+            if (!subData.subscribed) {
+                this.isSubscribed = false;
+                this._channelUrl = subData.channel_url;
+                this.showSubscriptionWall();
+                return;
+            }
+        } catch (err) {
+            // If check fails, block access
+            this.showSubscriptionWall();
+            return;
+        }
+
         this.currentPage = page;
 
         // Show/hide navbar based on page
