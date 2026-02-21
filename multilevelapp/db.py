@@ -223,9 +223,10 @@ def get_user_settings(user_id):
         conn.commit()
         c.execute("SELECT * FROM user_settings WHERE user_id = ?", (user_id,))
         settings = c.fetchone()
-        sb._fire_and_forget(sb.sync_user_settings, user_id=user_id)
     conn.close()
-    return dict(settings)
+    result = dict(settings)
+    sb._fire_and_forget(sb.sync_user_settings, **result)
+    return result
 
 
 def update_user_settings(user_id, **kwargs):
