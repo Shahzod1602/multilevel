@@ -16,6 +16,7 @@ jobs:
           password: ${{ secrets.SERVER_PASSWORD }}
           script: |
             cd /opt/multilevelapp
+            git stash || true
             git pull origin main
             # Copy updated files from multilevelapp/ to server root
             cp -r multilevelapp/app.py multilevelapp/db.py multilevelapp/web_server.py multilevelapp/run.py multilevelapp/supabase_sync.py multilevelapp/requirements.txt multilevelapp/Dockerfile multilevelapp/docker-compose.yml multilevelapp/questions.json .
@@ -27,6 +28,6 @@ jobs:
             docker compose build --no-cache
             docker compose up -d
             # One-time: sync all existing SQLite data to Supabase
-            sleep 5
+            sleep 10
             docker exec multilevel-app python -c "import supabase_sync as sb; sb.full_sync_to_supabase()"
             docker system prune -f
