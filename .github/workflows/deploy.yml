@@ -27,4 +27,12 @@ jobs:
             docker network create multilevel_web || true
             docker compose build --no-cache
             docker compose up -d
+            sleep 5
+            docker exec multilevel-app python -c "
+import os; print('SUPABASE_DB_URL set:', bool(os.getenv('SUPABASE_DB_URL')))
+import supabase_sync as sb; conn = sb._get_conn()
+if conn: print('DB connection OK'); conn.close()
+else: print('DB connection FAILED')
+"
+            docker logs multilevel-app --tail 30
             docker system prune -f
