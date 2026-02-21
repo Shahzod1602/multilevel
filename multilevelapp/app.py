@@ -18,6 +18,7 @@ from groq import Groq
 import re
 import math
 from dotenv import load_dotenv
+import supabase_sync as sb
 
 # Load environment variables
 load_dotenv()
@@ -99,12 +100,15 @@ def init_db():
                     if user_id and contact:
                         c.execute("INSERT OR REPLACE INTO users (user_id, contact, tariff) VALUES (?, ?, ?)",
                                   (user_id, contact, tariff))
+                        sb._fire_and_forget(sb.sync_user, user_id=user_id,
+                                            contact=contact, tariff=tariff)
                         logging.info(f"Saved user {user_id} from questions.json")
     except Exception as e:
         logging.error(f"Error loading users from questions.json: {str(e)}")
 
     conn.commit()
     conn.close()
+    sb._fire_and_forget(sb.sync_admin, user_id=5471121432)
 
 init_db()
 
@@ -183,8 +187,11 @@ def add_attempt(user_id):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute("INSERT INTO attempts (user_id) VALUES (?)", (user_id,))
+    attempt_id = c.lastrowid
     conn.commit()
     conn.close()
+    sb._fire_and_forget(sb.sync_attempt_insert, sqlite_id=attempt_id,
+                        user_id=user_id)
 
 # Check if user is admin
 def is_admin(user_id):
@@ -260,6 +267,8 @@ async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
               (user_id, phone_number, 'free'))
     conn.commit()
     conn.close()
+    sb._fire_and_forget(sb.sync_user, user_id=user_id, contact=phone_number,
+                        tariff='free')
 
     # After saving contact, check subscription
     await check_subscription(update, context)
@@ -875,6 +884,7 @@ async def admin_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
     c.execute("INSERT OR IGNORE INTO admins (user_id) VALUES (?)", (new_admin_id,))
     conn.commit()
     conn.close()
+    sb._fire_and_forget(sb.sync_admin, user_id=new_admin_id)
 
     await update.message.reply_text(f"✅ User {new_admin_id} added as admin.")
     logging.info(f"User {user_id} added admin {new_admin_id}")
@@ -949,6 +959,7 @@ async def upgrade_gold(update: Update, context: ContextTypes.DEFAULT_TYPE):
     c.execute("UPDATE users SET tariff = 'gold' WHERE user_id = ?", (target_user_id,))
     conn.commit()
     conn.close()
+    sb._fire_and_forget(sb.sync_user_tariff, user_id=target_user_id, tariff='gold')
 
     await update.message.reply_text(
         f"✅ User upgraded to Premium!\n\n"
@@ -996,6 +1007,7 @@ async def downgrade_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     c.execute("UPDATE users SET tariff = 'free' WHERE user_id = ?", (target_user_id,))
     conn.commit()
     conn.close()
+    sb._fire_and_forget(sb.sync_user_tariff, user_id=target_user_id, tariff='free')
 
     await update.message.reply_text(
         f"✅ User downgraded to Free.\n\n"
@@ -1029,10 +1041,15 @@ async def upload_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
+    schedule_time = datetime.utcnow() + timedelta(hours=1)
     c.execute("INSERT INTO ads (admin_id, image_path, caption, schedule_time) VALUES (?, ?, ?, ?)",
-              (user_id, file_path, caption, datetime.utcnow() + timedelta(hours=1)))
+              (user_id, file_path, caption, schedule_time))
+    ad_id = c.lastrowid
     conn.commit()
     conn.close()
+    sb._fire_and_forget(sb.sync_ad_insert, sqlite_id=ad_id, admin_id=user_id,
+                        image_path=file_path, caption=caption,
+                        schedule_time=schedule_time)
 
     await update.message.reply_text("✅ Ad scheduled for 1 hour.")
     logging.info(f"Admin {user_id} uploaded ad: {file_path}")
@@ -1065,6 +1082,7 @@ async def send_ad(context: ContextTypes.DEFAULT_TYPE):
 
         c.execute("UPDATE ads SET sent = 1 WHERE id = ?", (ad_id,))
         conn.commit()
+        sb._fire_and_forget(sb.sync_ad_mark_sent, sqlite_id=ad_id)
 
     conn.close()
 

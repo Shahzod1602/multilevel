@@ -6,6 +6,8 @@ import sqlite3
 import json
 from datetime import datetime, timedelta
 
+import supabase_sync as sb
+
 DB_NAME = "bot.db"
 
 
@@ -187,7 +189,17 @@ def get_or_create_user(user_id, first_name="", username="", photo_url=""):
         c.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
         user = c.fetchone()
     conn.close()
-    return dict(user)
+    result = dict(user)
+    sb._fire_and_forget(sb.sync_user, user_id=user_id,
+                        first_name=result.get("first_name", ""),
+                        username=result.get("username", ""),
+                        photo_url=result.get("photo_url", ""),
+                        contact=result.get("contact"),
+                        tariff=result.get("tariff", "free"),
+                        referral_code=result.get("referral_code"),
+                        bonus_mocks=result.get("bonus_mocks", 0),
+                        created_at=result.get("created_at"))
+    return result
 
 
 def get_user(user_id):
@@ -211,6 +223,7 @@ def get_user_settings(user_id):
         conn.commit()
         c.execute("SELECT * FROM user_settings WHERE user_id = ?", (user_id,))
         settings = c.fetchone()
+        sb._fire_and_forget(sb.sync_user_settings, user_id=user_id)
     conn.close()
     return dict(settings)
 
@@ -229,6 +242,7 @@ def update_user_settings(user_id, **kwargs):
     c.execute(f"UPDATE user_settings SET {set_clause} WHERE user_id=?", values)
     conn.commit()
     conn.close()
+    sb._fire_and_forget(sb.sync_user_settings, user_id=user_id, **fields)
 
 
 # ─── Session helpers ───────────────────────────────────────────
@@ -243,6 +257,8 @@ def create_session(user_id, session_type="practice", part="1.1"):
     session_id = c.lastrowid
     conn.commit()
     conn.close()
+    sb._fire_and_forget(sb.sync_session_insert, sqlite_id=session_id,
+                        user_id=user_id, session_type=session_type, part=part)
     return session_id
 
 
@@ -262,8 +278,14 @@ def add_response(session_id, question_text, transcription, duration, part):
         "INSERT INTO responses (session_id, question_text, transcription, duration, part) VALUES (?, ?, ?, ?, ?)",
         (session_id, question_text, transcription, duration, part)
     )
+    response_id = c.lastrowid
     conn.commit()
     conn.close()
+    sb._fire_and_forget(sb.sync_response_insert, sqlite_id=response_id,
+                        session_sqlite_id=session_id,
+                        question_text=question_text,
+                        transcription=transcription,
+                        duration=duration, part=part)
 
 
 def complete_session(session_id, scores, feedback):
@@ -307,8 +329,21 @@ def complete_session(session_id, scores, feedback):
             (user_id, today, minutes, minutes)
         )
 
+        # Sync daily_study to Supabase
+        c.execute("SELECT id, minutes, sessions_count FROM daily_study WHERE user_id=? AND date=?",
+                  (user_id, today))
+        ds_row = c.fetchone()
+        if ds_row:
+            sb._fire_and_forget(sb.sync_daily_study, sqlite_id=ds_row["id"],
+                                user_id=user_id, date=today,
+                                minutes=ds_row["minutes"],
+                                sessions_count=ds_row["sessions_count"])
+
     conn.commit()
     conn.close()
+    sb._fire_and_forget(sb.sync_session_complete, sqlite_id=session_id,
+                        scores=scores, feedback=feedback,
+                        completed_at=datetime.utcnow().isoformat())
 
 
 def get_session_responses(session_id):
@@ -585,6 +620,7 @@ def update_user_tariff(user_id, tariff):
     c.execute("UPDATE users SET tariff = ? WHERE user_id = ?", (tariff, user_id))
     conn.commit()
     conn.close()
+    sb._fire_and_forget(sb.sync_user_tariff, user_id=user_id, tariff=tariff)
 
 
 # ─── Referral helpers ─────────────────────────────────────────
@@ -644,6 +680,8 @@ def generate_referral_code(user_id):
             c.execute("UPDATE users SET referral_code = ? WHERE user_id = ?", (code, user_id))
             conn.commit()
             conn.close()
+            sb._fire_and_forget(sb.sync_user_field, user_id=user_id,
+                                referral_code=code)
             return code
 
     conn.close()
@@ -676,11 +714,25 @@ def process_referral(referred_id, code):
     # Create referral and reward both
     c.execute("INSERT INTO referrals (referrer_id, referred_id, rewarded) VALUES (?, ?, 1)",
               (referrer_id, referred_id))
+    referral_id = c.lastrowid
     c.execute("UPDATE users SET bonus_mocks = COALESCE(bonus_mocks, 0) + 1 WHERE user_id = ?", (referrer_id,))
     c.execute("UPDATE users SET bonus_mocks = COALESCE(bonus_mocks, 0) + 1 WHERE user_id = ?", (referred_id,))
 
     conn.commit()
+
+    # Get updated bonus_mocks for sync
+    c.execute("SELECT COALESCE(bonus_mocks, 0) as bm FROM users WHERE user_id = ?", (referrer_id,))
+    r1 = c.fetchone()
+    c.execute("SELECT COALESCE(bonus_mocks, 0) as bm FROM users WHERE user_id = ?", (referred_id,))
+    r2 = c.fetchone()
     conn.close()
+
+    sb._fire_and_forget(sb.sync_referral_insert, sqlite_id=referral_id,
+                        referrer_id=referrer_id, referred_id=referred_id, rewarded=1)
+    sb._fire_and_forget(sb.sync_user_field, user_id=referrer_id,
+                        bonus_mocks=r1["bm"] if r1 else 1)
+    sb._fire_and_forget(sb.sync_user_field, user_id=referred_id,
+                        bonus_mocks=r2["bm"] if r2 else 1)
     return {"success": True}
 
 
@@ -711,7 +763,10 @@ def use_bonus_mock(user_id):
     if row and row["bonus"] > 0:
         c.execute("UPDATE users SET bonus_mocks = bonus_mocks - 1 WHERE user_id = ?", (user_id,))
         conn.commit()
+        new_bonus = row["bonus"] - 1
         conn.close()
+        sb._fire_and_forget(sb.sync_user_field, user_id=user_id,
+                            bonus_mocks=new_bonus)
         return True
     conn.close()
     return False

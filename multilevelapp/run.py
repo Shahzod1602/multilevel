@@ -29,9 +29,13 @@ def run_web_server():
     import uvicorn
     import web_server
     import db
+    import supabase_sync as sb
 
     # Run migrations
     db.migrate()
+
+    # Restore from Supabase if SQLite is empty (e.g. after server migration)
+    sb.restore_from_supabase()
 
     port = int(os.getenv("WEB_PORT", "8000"))
     logger.info(f"Starting web server on port {port}...")
