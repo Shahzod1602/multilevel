@@ -172,6 +172,12 @@ const App = {
             case 'admin':
                 AdminPage.render(this.container);
                 break;
+            case 'premium':
+                PremiumPage.render(this.container);
+                break;
+            case 'payment':
+                PaymentPage.render(this.container, params);
+                break;
             default:
                 HomePage.render(this.container);
         }

@@ -8,6 +8,29 @@ const AdminPage = {
         try {
             const stats = await API.get('/api/admin/stats');
 
+            // Fetch pending subscriptions
+            let pendingSubs = [];
+            try {
+                const subData = await API.get('/api/admin/subscriptions');
+                pendingSubs = subData.subscriptions || [];
+            } catch (e) {}
+
+            const pendingHtml = pendingSubs.length > 0 ? `
+                <h3 class="mt-20 mb-8">Pending Payments (${pendingSubs.length})</h3>
+                <div id="pending-subs">${pendingSubs.map(s => `
+                    <div class="sub-request-card" data-sub-id="${s.id}">
+                        <div class="sub-request-info">
+                            <div class="sub-request-name">${this.escapeHtml(s.first_name || 'User')} <span class="text-xs text-secondary">@${this.escapeHtml(s.username || '')}</span></div>
+                            <div class="text-xs text-secondary">ID: ${s.user_id} · ${s.plan} · ${(s.amount || 0).toLocaleString()} so'm</div>
+                        </div>
+                        <div class="sub-request-actions">
+                            <button class="sub-approve-btn" data-sub-id="${s.id}">Approve</button>
+                            <button class="sub-reject-btn" data-sub-id="${s.id}">Reject</button>
+                        </div>
+                    </div>
+                `).join('')}</div>
+            ` : '';
+
             container.innerHTML = `
                 <div class="page-header">
                     <button class="back-btn" id="back-btn">&#8592;</button>
@@ -32,6 +55,8 @@ const AdminPage = {
                         <div class="stat-label">Premium Users</div>
                     </div>
                 </div>
+
+                ${pendingHtml}
 
                 <h3 class="mt-20 mb-8">User Management</h3>
                 <div class="search-wrapper">
@@ -65,6 +90,39 @@ const AdminPage = {
 
             // Initial load
             doSearch('');
+
+            // Subscription approve/reject handlers
+            container.querySelectorAll('.sub-approve-btn').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const subId = parseInt(btn.dataset.subId);
+                    btn.textContent = '...';
+                    btn.disabled = true;
+                    try {
+                        await API.put(`/api/admin/subscriptions/${subId}`, { action: 'approve' });
+                        const card = btn.closest('.sub-request-card');
+                        card.style.borderLeft = '4px solid var(--accent-green)';
+                        card.querySelector('.sub-request-actions').innerHTML = '<span style="color:var(--accent-green);font-weight:600;">Approved</span>';
+                    } catch (err) {
+                        btn.textContent = 'Error';
+                    }
+                });
+            });
+
+            container.querySelectorAll('.sub-reject-btn').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const subId = parseInt(btn.dataset.subId);
+                    btn.textContent = '...';
+                    btn.disabled = true;
+                    try {
+                        await API.put(`/api/admin/subscriptions/${subId}`, { action: 'reject' });
+                        const card = btn.closest('.sub-request-card');
+                        card.style.borderLeft = '4px solid var(--accent-red)';
+                        card.querySelector('.sub-request-actions').innerHTML = '<span style="color:var(--accent-red);font-weight:600;">Rejected</span>';
+                    } catch (err) {
+                        btn.textContent = 'Error';
+                    }
+                });
+            });
         } catch (err) {
             container.innerHTML = `
                 <div class="page-header">

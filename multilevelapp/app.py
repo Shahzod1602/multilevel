@@ -1119,6 +1119,87 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(stats_message, parse_mode="Markdown")
     logging.info(f"Admin {user_id} requested stats")
 
+# Subscription approval commands
+async def approve_sub_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    if not is_admin(user_id):
+        await update.message.reply_text("Not authorized.")
+        return
+
+    args = context.args
+    if not args or len(args) < 1:
+        await update.message.reply_text(
+            "Usage: /approve_sub <subscription_id>\n\n"
+            "View pending subscriptions in the admin panel."
+        )
+        return
+
+    sub_id = args[0]
+    if not sub_id.isdigit():
+        await update.message.reply_text("Subscription ID must be a number.")
+        return
+
+    import db as db_module
+    result = db_module.approve_subscription(int(sub_id), user_id)
+    if "error" in result:
+        await update.message.reply_text(f"Error: {result['error']}")
+        return
+
+    await update.message.reply_text(
+        f"Subscription #{sub_id} approved!\n\n"
+        f"User: {result['user_id']}\n"
+        f"Plan: {result['plan']}\n"
+        f"Expires: {result['expires_at']}"
+    )
+
+    # Notify the user
+    try:
+        await context.bot.send_message(
+            chat_id=result["user_id"],
+            text=f"Your {result['plan']} subscription has been activated! Enjoy your premium features."
+        )
+    except Exception as e:
+        logging.error(f"Failed to notify user {result['user_id']}: {e}")
+
+    logging.info(f"Admin {user_id} approved subscription #{sub_id}")
+
+
+async def reject_sub_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    if not is_admin(user_id):
+        await update.message.reply_text("Not authorized.")
+        return
+
+    args = context.args
+    if not args or len(args) < 1:
+        await update.message.reply_text("Usage: /reject_sub <subscription_id>")
+        return
+
+    sub_id = args[0]
+    if not sub_id.isdigit():
+        await update.message.reply_text("Subscription ID must be a number.")
+        return
+
+    import db as db_module
+    result = db_module.reject_subscription(int(sub_id))
+    if "error" in result:
+        await update.message.reply_text(f"Error: {result['error']}")
+        return
+
+    await update.message.reply_text(f"Subscription #{sub_id} rejected.")
+
+    # Notify the user
+    try:
+        await context.bot.send_message(
+            chat_id=result["user_id"],
+            text="Your subscription request was not approved. Please contact admin for details."
+        )
+    except Exception as e:
+        logging.error(f"Failed to notify user {result['user_id']}: {e}")
+
+    logging.info(f"Admin {user_id} rejected subscription #{sub_id}")
+
+
 # Main function
 async def main():
     global BOT_USERNAME
@@ -1133,6 +1214,8 @@ async def main():
     application.add_handler(CommandHandler("downgrade", downgrade_user))
     application.add_handler(MessageHandler(filters.PHOTO, upload_ad))
     application.add_handler(CommandHandler("stats", stats))
+    application.add_handler(CommandHandler("approve_sub", approve_sub_cmd))
+    application.add_handler(CommandHandler("reject_sub", reject_sub_cmd))
 
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
     scheduler = AsyncIOScheduler()

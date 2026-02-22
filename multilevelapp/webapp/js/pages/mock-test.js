@@ -62,7 +62,7 @@ const MockTestPage = {
 
             this.renderIntro(container);
         } catch (err) {
-            const isLimit = err.message.includes('Daily mock limit');
+            const isLimit = err.message.includes('limit reached') || err.message.includes('Mock test limit');
             container.innerHTML = `
                 <div class="page-header">
                     <button class="back-btn" id="back-btn">&#8592;</button>
@@ -71,10 +71,10 @@ const MockTestPage = {
                 ${isLimit ? `
                     <div class="upgrade-prompt">
                         <div class="upgrade-icon">&#128274;</div>
-                        <h3>Daily Mock Limit Reached</h3>
-                        <p>You've used all your mock tests for today.</p>
-                        <p class="mt-8">Upgrade to <strong>Premium</strong> for 5 mock tests per day!</p>
-                        <button class="btn btn-primary mt-12" id="upgrade-btn">Contact Admin to Upgrade</button>
+                        <h3>Mock Test Limit Reached</h3>
+                        <p>You've used all your available mock tests.</p>
+                        <p class="mt-8">Upgrade to <strong>Premium</strong> for more mock tests!</p>
+                        <button class="btn btn-primary mt-12" id="upgrade-btn">View Premium Plans</button>
                         <button class="btn btn-outline mt-8" id="home-btn">Back to Home</button>
                     </div>
                 ` : `
@@ -86,9 +86,7 @@ const MockTestPage = {
             container.querySelector('#back-btn').addEventListener('click', () => App.navigate('home'));
             container.querySelector('#home-btn')?.addEventListener('click', () => App.navigate('home'));
             container.querySelector('#upgrade-btn')?.addEventListener('click', () => {
-                if (window.Telegram?.WebApp) {
-                    window.Telegram.WebApp.openTelegramLink('https://t.me/abdushukur_d');
-                }
+                App.navigate('premium');
             });
         }
     },

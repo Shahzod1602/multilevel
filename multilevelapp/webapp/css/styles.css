@@ -1885,3 +1885,350 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
     font-size: 11px;
     color: var(--text-secondary);
 }
+
+/* ─── Premium Status Card ───────────────────────────────────── */
+.premium-status-card {
+    border-radius: var(--radius);
+    padding: 20px;
+    text-align: center;
+    margin-bottom: 12px;
+    color: white;
+}
+
+.premium-status-card.free {
+    background: linear-gradient(135deg, #6C5CE7, #A29BFE);
+}
+
+.premium-status-card.active {
+    background: linear-gradient(135deg, #00B894, #55EFC4);
+}
+
+.premium-status-card.pending {
+    background: linear-gradient(135deg, #FDCB6E, #F39C12);
+}
+
+.premium-status-icon {
+    font-size: 36px;
+    margin-bottom: 8px;
+}
+
+.premium-status-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.premium-status-desc {
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+.premium-usage-row {
+    display: flex;
+    gap: 12px;
+}
+
+.premium-usage-item {
+    flex: 1;
+}
+
+.premium-usage-label {
+    font-size: 12px;
+    opacity: 0.85;
+    margin-bottom: 4px;
+}
+
+.premium-usage-count {
+    font-size: 12px;
+    font-weight: 600;
+    margin-top: 4px;
+}
+
+/* Usage Bar */
+.usage-bar {
+    height: 6px;
+    background: rgba(255,255,255,0.3);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.usage-bar-fill {
+    height: 100%;
+    background: white;
+    border-radius: 3px;
+    transition: width 0.5s ease;
+}
+
+/* ─── Plan Cards ────────────────────────────────────────────── */
+.plan-card {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow);
+    margin-bottom: 12px;
+    border: 2px solid var(--border);
+    position: relative;
+}
+
+.plan-card.best-value {
+    border-color: var(--accent-green);
+}
+
+.best-value-badge {
+    position: absolute;
+    top: -10px;
+    right: 16px;
+    background: var(--accent-green);
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 10px;
+}
+
+.plan-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.plan-name {
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.plan-price {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--primary);
+}
+
+.plan-currency {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--text-secondary);
+}
+
+.plan-features {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 16px;
+}
+
+.plan-features li {
+    position: relative;
+    padding: 6px 0 6px 24px;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.plan-features li::before {
+    content: '\2713';
+    position: absolute;
+    left: 0;
+    color: var(--accent-green);
+    font-weight: 700;
+}
+
+.plan-btn {
+    width: 100%;
+}
+
+.plan-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ─── Payment Page ──────────────────────────────────────────── */
+.payment-card-box {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: var(--shadow);
+    border: 2px solid var(--primary);
+}
+
+.payment-row {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.payment-row:last-child {
+    border-bottom: none;
+}
+
+.payment-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.payment-value {
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.payment-value-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.copy-btn-inline {
+    padding: 4px 12px;
+    border-radius: 8px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    white-space: nowrap;
+}
+
+.payment-instructions {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: var(--shadow);
+}
+
+.payment-instructions h3 {
+    margin-bottom: 10px;
+}
+
+.payment-instructions ol {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.payment-instructions li {
+    font-size: 14px;
+    color: var(--text-secondary);
+    padding: 4px 0;
+    line-height: 1.5;
+}
+
+/* ─── Admin Subscription Cards ──────────────────────────────── */
+.sub-request-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--bg-card);
+    border-radius: var(--radius-sm);
+    margin-bottom: 8px;
+    box-shadow: var(--shadow);
+    border-left: 4px solid var(--accent-orange);
+}
+
+.sub-request-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.sub-request-name {
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sub-request-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.sub-approve-btn {
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: var(--accent-green);
+    color: white;
+    border: none;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.sub-reject-btn {
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: var(--accent-red);
+    color: white;
+    border: none;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+/* ─── Profile Plan Card ─────────────────────────────────────── */
+.profile-plan-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: var(--radius);
+    margin-bottom: 12px;
+    cursor: pointer;
+    transition: transform var(--transition);
+}
+
+.profile-plan-card:active {
+    transform: scale(0.98);
+}
+
+.profile-plan-card.free {
+    background: linear-gradient(135deg, #6C5CE7, #A29BFE);
+    color: white;
+}
+
+.profile-plan-card.active {
+    background: linear-gradient(135deg, #00B894, #55EFC4);
+    color: white;
+}
+
+.profile-plan-card.pending {
+    background: linear-gradient(135deg, #FDCB6E, #F39C12);
+    color: white;
+}
+
+.profile-plan-icon {
+    font-size: 28px;
+    flex-shrink: 0;
+}
+
+.profile-plan-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.profile-plan-name {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.profile-plan-detail {
+    font-size: 12px;
+    opacity: 0.9;
+    margin-top: 2px;
+}
+
+.profile-plan-arrow {
+    font-size: 20px;
+    opacity: 0.7;
+}
+
+/* ─── Premium Feature Card Highlight ────────────────────────── */
+.premium-feature-card {
+    border: 2px solid var(--accent-orange);
+}
+
+.dark .premium-feature-card {
+    border-color: #FDCB6E;
+}

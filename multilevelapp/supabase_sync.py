@@ -291,6 +291,60 @@ def sync_user_tariff(user_id, tariff):
         conn.close()
 
 
+def sync_subscription_insert(sqlite_id, user_id, plan, status='pending',
+                             mock_limit=0, practice_limit=0, amount=0,
+                             started_at=None, expires_at=None, approved_by=None):
+    """Insert a subscription to Supabase."""
+    conn = _get_conn()
+    if not conn:
+        return
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO subscriptions (sqlite_id, user_id, plan, status, mock_limit, practice_limit, amount, started_at, expires_at, approved_by)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (sqlite_id) DO NOTHING
+            """, (sqlite_id, user_id, plan, status, mock_limit, practice_limit, amount,
+                  str(started_at) if started_at else None,
+                  str(expires_at) if expires_at else None,
+                  approved_by))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def sync_subscription_update(sqlite_id, status=None, started_at=None,
+                             expires_at=None, approved_by=None, **kwargs):
+    """Update a subscription in Supabase."""
+    conn = _get_conn()
+    if not conn:
+        return
+    try:
+        set_parts = []
+        values = []
+        if status is not None:
+            set_parts.append("status = %s")
+            values.append(status)
+        if started_at is not None:
+            set_parts.append("started_at = %s")
+            values.append(str(started_at))
+        if expires_at is not None:
+            set_parts.append("expires_at = %s")
+            values.append(str(expires_at))
+        if approved_by is not None:
+            set_parts.append("approved_by = %s")
+            values.append(approved_by)
+        if not set_parts:
+            conn.close()
+            return
+        values.append(sqlite_id)
+        with conn.cursor() as cur:
+            cur.execute(f"UPDATE subscriptions SET {', '.join(set_parts)} WHERE sqlite_id = %s", values)
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def sync_user_field(user_id, **kwargs):
     """Update specific user fields in Supabase."""
     conn = _get_conn()

@@ -147,6 +147,9 @@ def migrate():
     # Run referral migrations
     migrate_referrals()
 
+    # Run subscription migrations
+    migrate_subscriptions()
+
 
 def score_to_cefr(score):
     """Convert 0-75 score to CEFR level."""
@@ -771,3 +774,337 @@ def use_bonus_mock(user_id):
         return True
     conn.close()
     return False
+
+
+# ─── Subscription helpers ─────────────────────────────────────
+
+PLANS = {
+    "weekly": {"mock_limit": 7, "practice_limit": 50, "amount": 7000, "days": 7},
+    "monthly": {"mock_limit": 24, "practice_limit": 200, "amount": 20000, "days": 30},
+}
+
+
+def migrate_subscriptions():
+    """Create subscriptions table and add limit columns to users."""
+    conn = get_connection()
+    c = conn.cursor()
+
+    # Add one-time free-tier limit columns to users
+    for col, col_type, default in [
+        ("mock_total", "INTEGER", "7"),
+        ("mock_used", "INTEGER", "0"),
+        ("practice_total", "INTEGER", "50"),
+        ("practice_used", "INTEGER", "0"),
+    ]:
+        try:
+            c.execute(f"ALTER TABLE users ADD COLUMN {col} {col_type} DEFAULT {default}")
+        except sqlite3.OperationalError:
+            pass
+
+    c.execute('''CREATE TABLE IF NOT EXISTS subscriptions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        plan TEXT NOT NULL,
+        status TEXT DEFAULT 'pending',
+        started_at TIMESTAMP,
+        expires_at TIMESTAMP,
+        mock_limit INTEGER DEFAULT 0,
+        practice_limit INTEGER DEFAULT 0,
+        mock_used INTEGER DEFAULT 0,
+        practice_used INTEGER DEFAULT 0,
+        amount INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        approved_by INTEGER,
+        FOREIGN KEY (user_id) REFERENCES users (user_id)
+    )''')
+
+    c.execute("CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id)")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status)")
+
+    conn.commit()
+    conn.close()
+
+
+def create_subscription_request(user_id, plan):
+    """Create a pending subscription request. Prevents duplicate pending requests."""
+    if plan not in PLANS:
+        return {"error": "Invalid plan"}
+
+    conn = get_connection()
+    c = conn.cursor()
+
+    # Check for existing pending request
+    c.execute("SELECT id FROM subscriptions WHERE user_id = ? AND status = 'pending'", (user_id,))
+    if c.fetchone():
+        conn.close()
+        return {"error": "You already have a pending request"}
+
+    plan_info = PLANS[plan]
+    c.execute(
+        """INSERT INTO subscriptions (user_id, plan, status, mock_limit, practice_limit, amount)
+           VALUES (?, ?, 'pending', ?, ?, ?)""",
+        (user_id, plan, plan_info["mock_limit"], plan_info["practice_limit"], plan_info["amount"])
+    )
+    sub_id = c.lastrowid
+    conn.commit()
+    conn.close()
+
+    sb._fire_and_forget(sb.sync_subscription_insert, sqlite_id=sub_id,
+                        user_id=user_id, plan=plan, status='pending',
+                        mock_limit=plan_info["mock_limit"],
+                        practice_limit=plan_info["practice_limit"],
+                        amount=plan_info["amount"])
+    return {"success": True, "subscription_id": sub_id}
+
+
+def approve_subscription(sub_id, admin_id):
+    """Activate a pending subscription."""
+    conn = get_connection()
+    c = conn.cursor()
+
+    c.execute("SELECT * FROM subscriptions WHERE id = ? AND status = 'pending'", (sub_id,))
+    sub = c.fetchone()
+    if not sub:
+        conn.close()
+        return {"error": "Subscription not found or not pending"}
+
+    sub = dict(sub)
+    plan_info = PLANS.get(sub["plan"], {})
+    days = plan_info.get("days", 7)
+
+    now = datetime.utcnow()
+    expires = now + timedelta(days=days)
+
+    c.execute(
+        """UPDATE subscriptions
+           SET status='active', started_at=?, expires_at=?, approved_by=?, mock_used=0, practice_used=0
+           WHERE id=?""",
+        (now.isoformat(), expires.isoformat(), admin_id, sub_id)
+    )
+
+    # Update user tariff
+    c.execute("UPDATE users SET tariff = ? WHERE user_id = ?", (sub["plan"], sub["user_id"]))
+
+    conn.commit()
+    conn.close()
+
+    sb._fire_and_forget(sb.sync_subscription_update, sqlite_id=sub_id,
+                        status='active', started_at=now.isoformat(),
+                        expires_at=expires.isoformat(), approved_by=admin_id)
+    sb._fire_and_forget(sb.sync_user_tariff, user_id=sub["user_id"], tariff=sub["plan"])
+
+    return {"success": True, "user_id": sub["user_id"], "plan": sub["plan"],
+            "expires_at": expires.isoformat()}
+
+
+def reject_subscription(sub_id):
+    """Cancel/reject a pending subscription."""
+    conn = get_connection()
+    c = conn.cursor()
+
+    c.execute("SELECT * FROM subscriptions WHERE id = ? AND status = 'pending'", (sub_id,))
+    sub = c.fetchone()
+    if not sub:
+        conn.close()
+        return {"error": "Subscription not found or not pending"}
+
+    sub = dict(sub)
+    c.execute("UPDATE subscriptions SET status='cancelled' WHERE id=?", (sub_id,))
+    conn.commit()
+    conn.close()
+
+    sb._fire_and_forget(sb.sync_subscription_update, sqlite_id=sub_id, status='cancelled')
+    return {"success": True, "user_id": sub["user_id"]}
+
+
+def get_active_subscription(user_id):
+    """Return active subscription, lazy-expiring if past date."""
+    conn = get_connection()
+    c = conn.cursor()
+
+    c.execute(
+        "SELECT * FROM subscriptions WHERE user_id = ? AND status = 'active' ORDER BY id DESC LIMIT 1",
+        (user_id,)
+    )
+    sub = c.fetchone()
+    if not sub:
+        conn.close()
+        return None
+
+    sub = dict(sub)
+
+    # Check expiration
+    if sub["expires_at"]:
+        try:
+            expires = datetime.fromisoformat(sub["expires_at"])
+            if datetime.utcnow() > expires:
+                c.execute("UPDATE subscriptions SET status='expired' WHERE id=?", (sub["id"],))
+                c.execute("UPDATE users SET tariff='free' WHERE user_id=?", (user_id,))
+                conn.commit()
+                conn.close()
+                sb._fire_and_forget(sb.sync_subscription_update, sqlite_id=sub["id"], status='expired')
+                sb._fire_and_forget(sb.sync_user_tariff, user_id=user_id, tariff='free')
+                return None
+        except (ValueError, TypeError):
+            pass
+
+    conn.close()
+    return sub
+
+
+def get_pending_subscription(user_id):
+    """Return pending subscription for a user."""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute(
+        "SELECT * FROM subscriptions WHERE user_id = ? AND status = 'pending' ORDER BY id DESC LIMIT 1",
+        (user_id,)
+    )
+    sub = c.fetchone()
+    conn.close()
+    return dict(sub) if sub else None
+
+
+def increment_mock_usage(user_id):
+    """Increment mock usage. Check subscription first, fall back to free tier. Returns True if allowed."""
+    # Check active subscription
+    sub = get_active_subscription(user_id)
+    if sub:
+        if sub["mock_used"] >= sub["mock_limit"]:
+            return False
+        conn = get_connection()
+        c = conn.cursor()
+        c.execute("UPDATE subscriptions SET mock_used = mock_used + 1 WHERE id = ?", (sub["id"],))
+        conn.commit()
+        conn.close()
+        return True
+
+    # Free tier: check one-time limits
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT mock_total, mock_used FROM users WHERE user_id = ?", (user_id,))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        return False
+
+    if row["mock_used"] >= row["mock_total"]:
+        # Check bonus mocks
+        conn.close()
+        return use_bonus_mock(user_id)
+
+    c.execute("UPDATE users SET mock_used = mock_used + 1 WHERE user_id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def increment_practice_usage(user_id):
+    """Increment practice usage. Check subscription first, fall back to free tier. Returns True if allowed."""
+    sub = get_active_subscription(user_id)
+    if sub:
+        if sub["practice_used"] >= sub["practice_limit"]:
+            return False
+        conn = get_connection()
+        c = conn.cursor()
+        c.execute("UPDATE subscriptions SET practice_used = practice_used + 1 WHERE id = ?", (sub["id"],))
+        conn.commit()
+        conn.close()
+        return True
+
+    # Free tier
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT practice_total, practice_used FROM users WHERE user_id = ?", (user_id,))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        return False
+
+    if row["practice_used"] >= row["practice_total"]:
+        conn.close()
+        return False
+
+    c.execute("UPDATE users SET practice_used = practice_used + 1 WHERE user_id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def get_user_limits(user_id):
+    """Return combined limit info (free or subscription)."""
+    sub = get_active_subscription(user_id)
+    pending = get_pending_subscription(user_id)
+    referral_stats = get_referral_stats(user_id)
+    bonus_mocks = referral_stats.get("bonus_mocks", 0)
+
+    if sub:
+        days_left = 0
+        if sub["expires_at"]:
+            try:
+                expires = datetime.fromisoformat(sub["expires_at"])
+                days_left = max(0, (expires - datetime.utcnow()).days)
+            except (ValueError, TypeError):
+                pass
+
+        return {
+            "plan": sub["plan"],
+            "status": "active",
+            "mock_used": sub["mock_used"],
+            "mock_limit": sub["mock_limit"],
+            "mock_remaining": max(0, sub["mock_limit"] - sub["mock_used"]) + bonus_mocks,
+            "practice_used": sub["practice_used"],
+            "practice_limit": sub["practice_limit"],
+            "practice_remaining": max(0, sub["practice_limit"] - sub["practice_used"]),
+            "bonus_mocks": bonus_mocks,
+            "days_left": days_left,
+            "expires_at": sub["expires_at"],
+            "pending": None,
+        }
+
+    # Free tier
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT mock_total, mock_used, practice_total, practice_used FROM users WHERE user_id = ?", (user_id,))
+    row = c.fetchone()
+    conn.close()
+
+    if not row:
+        return {
+            "plan": "free", "status": "free",
+            "mock_used": 0, "mock_limit": 7, "mock_remaining": 7 + bonus_mocks,
+            "practice_used": 0, "practice_limit": 50, "practice_remaining": 50,
+            "bonus_mocks": bonus_mocks, "days_left": None, "expires_at": None,
+            "pending": dict(pending) if pending else None,
+        }
+
+    return {
+        "plan": "free",
+        "status": "free",
+        "mock_used": row["mock_used"],
+        "mock_limit": row["mock_total"],
+        "mock_remaining": max(0, row["mock_total"] - row["mock_used"]) + bonus_mocks,
+        "practice_used": row["practice_used"],
+        "practice_limit": row["practice_total"],
+        "practice_remaining": max(0, row["practice_total"] - row["practice_used"]),
+        "bonus_mocks": bonus_mocks,
+        "days_left": None,
+        "expires_at": None,
+        "pending": dict(pending) if pending else None,
+    }
+
+
+def get_pending_subscriptions():
+    """Admin: list all pending subscriptions with user info."""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+        SELECT s.*, u.first_name, u.username
+        FROM subscriptions s
+        JOIN users u ON u.user_id = s.user_id
+        WHERE s.status = 'pending'
+        ORDER BY s.created_at DESC
+    """)
+    rows = c.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]

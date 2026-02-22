@@ -100,6 +100,24 @@ CREATE TABLE IF NOT EXISTS ads (
     sent INTEGER DEFAULT 0
 );
 
+-- 10. Subscriptions
+CREATE TABLE IF NOT EXISTS subscriptions (
+    id BIGSERIAL PRIMARY KEY,
+    sqlite_id BIGINT UNIQUE NOT NULL,
+    user_id BIGINT NOT NULL,
+    plan TEXT NOT NULL,
+    status TEXT DEFAULT 'pending',
+    started_at TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ,
+    mock_limit INTEGER DEFAULT 0,
+    practice_limit INTEGER DEFAULT 0,
+    mock_used INTEGER DEFAULT 0,
+    practice_used INTEGER DEFAULT 0,
+    amount INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    approved_by BIGINT
+);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_sqlite_id ON sessions(sqlite_id);
@@ -107,3 +125,5 @@ CREATE INDEX IF NOT EXISTS idx_responses_session_sqlite_id ON responses(session_
 CREATE INDEX IF NOT EXISTS idx_attempts_user_id ON attempts(user_id);
 CREATE INDEX IF NOT EXISTS idx_daily_study_user_date ON daily_study(user_id, date);
 CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);

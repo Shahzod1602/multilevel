@@ -240,19 +240,20 @@ async def get_tests(user=Depends(get_current_user)):
 
 @app.get("/api/session-info")
 async def session_info(user=Depends(get_current_user)):
-    tariff = user.get("tariff", "free")
-    is_premium = tariff != "free"
-    mock_count = db.get_daily_mock_count(user["user_id"])
-    mock_limit = MOCK_LIMIT_PREMIUM if is_premium else MOCK_LIMIT_FREE
-    referral_stats = db.get_referral_stats(user["user_id"])
-    bonus_mocks = referral_stats.get("bonus_mocks", 0)
+    limits = db.get_user_limits(user["user_id"])
     return {
-        "mock_today": mock_count,
-        "mock_limit": mock_limit,
-        "mock_remaining": max(0, mock_limit - mock_count) + bonus_mocks,
-        "bonus_mocks": bonus_mocks,
-        "is_premium": is_premium,
-        "tariff": tariff,
+        "plan": limits["plan"],
+        "status": limits["status"],
+        "mock_used": limits["mock_used"],
+        "mock_limit": limits["mock_limit"],
+        "mock_remaining": limits["mock_remaining"],
+        "practice_used": limits["practice_used"],
+        "practice_limit": limits["practice_limit"],
+        "practice_remaining": limits["practice_remaining"],
+        "bonus_mocks": limits["bonus_mocks"],
+        "days_left": limits["days_left"],
+        "is_premium": limits["plan"] != "free",
+        "tariff": limits["plan"],
     }
 
 
@@ -268,23 +269,27 @@ async def get_topics(part: str = "1.1", user=Depends(get_current_user)):
     return {"topics": topics, "total": len(topics)}
 
 
-MOCK_LIMIT_FREE = 2
-MOCK_LIMIT_PREMIUM = 5
+CARD_NUMBER = "5614 6819 1914 7144"
+CARD_HOLDER = "Nematov Shahzod"
 
 @app.post("/api/sessions/start")
 async def start_session(body: SessionStart, user=Depends(get_current_user)):
     if body.type == "mock":
-        mock_count = db.get_daily_mock_count(user["user_id"])
-        is_premium = user.get("tariff", "free") != "free"
-        limit = MOCK_LIMIT_PREMIUM if is_premium else MOCK_LIMIT_FREE
-        if mock_count >= limit:
-            # Check for bonus mocks
-            bonus_used = db.use_bonus_mock(user["user_id"])
-            if not bonus_used:
-                if is_premium:
-                    raise HTTPException(403, f"Daily mock limit reached ({MOCK_LIMIT_PREMIUM}/day).")
-                else:
-                    raise HTTPException(403, f"Daily mock limit reached ({MOCK_LIMIT_FREE}/day). Upgrade to Premium for {MOCK_LIMIT_PREMIUM} mocks per day!")
+        allowed = db.increment_mock_usage(user["user_id"])
+        if not allowed:
+            limits = db.get_user_limits(user["user_id"])
+            if limits["plan"] == "free":
+                raise HTTPException(403, f"Mock test limit reached ({limits['mock_limit']} total). Upgrade to Premium for more!")
+            else:
+                raise HTTPException(403, f"Mock test limit reached ({limits['mock_limit']} for your {limits['plan']} plan).")
+    elif body.type == "practice":
+        allowed = db.increment_practice_usage(user["user_id"])
+        if not allowed:
+            limits = db.get_user_limits(user["user_id"])
+            if limits["plan"] == "free":
+                raise HTTPException(403, f"Practice limit reached ({limits['practice_limit']} total). Upgrade to Premium for more!")
+            else:
+                raise HTTPException(403, f"Practice limit reached ({limits['practice_limit']} for your {limits['plan']} plan).")
 
     session_id = db.create_session(user["user_id"], body.type, body.part)
 
@@ -864,7 +869,7 @@ async def check_pronunciation(
                 pass
 
 
-# ─── Admin Panel ─────────────────────────────────────────────
+# ─── Admin Auth ──────────────────────────────────────────────
 
 async def get_admin_user(request: Request) -> dict:
     """Dependency: validate user is admin."""
@@ -873,6 +878,61 @@ async def get_admin_user(request: Request) -> dict:
         raise HTTPException(403, "Admin access required")
     return user
 
+
+# ─── Subscription System ─────────────────────────────────────
+
+@app.get("/api/subscription")
+async def get_subscription(user=Depends(get_current_user)):
+    limits = db.get_user_limits(user["user_id"])
+    return limits
+
+
+class SubscriptionRequest(BaseModel):
+    plan: str
+
+
+@app.post("/api/subscription/request")
+async def request_subscription(body: SubscriptionRequest, user=Depends(get_current_user)):
+    if body.plan not in db.PLANS:
+        raise HTTPException(400, "Invalid plan. Choose 'weekly' or 'monthly'.")
+    result = db.create_subscription_request(user["user_id"], body.plan)
+    if "error" in result:
+        raise HTTPException(400, result["error"])
+    plan_info = db.PLANS[body.plan]
+    return {
+        "success": True,
+        "subscription_id": result["subscription_id"],
+        "card_number": CARD_NUMBER,
+        "card_holder": CARD_HOLDER,
+        "amount": plan_info["amount"],
+        "plan": body.plan,
+    }
+
+
+@app.get("/api/admin/subscriptions")
+async def admin_subscriptions(user=Depends(get_admin_user)):
+    pending = db.get_pending_subscriptions()
+    return {"subscriptions": pending}
+
+
+class SubActionRequest(BaseModel):
+    action: str  # 'approve' or 'reject'
+
+
+@app.put("/api/admin/subscriptions/{sub_id}")
+async def admin_sub_action(sub_id: int, body: SubActionRequest, user=Depends(get_admin_user)):
+    if body.action == "approve":
+        result = db.approve_subscription(sub_id, user["user_id"])
+    elif body.action == "reject":
+        result = db.reject_subscription(sub_id)
+    else:
+        raise HTTPException(400, "Invalid action")
+    if "error" in result:
+        raise HTTPException(400, result["error"])
+    return result
+
+
+# ─── Admin Panel ─────────────────────────────────────────────
 
 @app.get("/api/admin/stats")
 async def admin_stats(user=Depends(get_admin_user)):

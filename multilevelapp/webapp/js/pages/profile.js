@@ -29,6 +29,53 @@ const ProfilePage = {
             referral = await API.get('/api/referral');
         } catch (e) {}
 
+        // Get subscription info
+        let limits = null;
+        try {
+            limits = await API.get('/api/subscription');
+        } catch (e) {}
+
+        let planCardHtml = '';
+        if (limits) {
+            const isActive = limits.status === 'active' && limits.plan !== 'free';
+            const isPending = limits.pending != null;
+            if (isActive) {
+                const planLabel = limits.plan === 'weekly' ? 'Weekly' : 'Monthly';
+                planCardHtml = `
+                    <div class="profile-plan-card active" id="plan-card">
+                        <div class="profile-plan-icon">&#11088;</div>
+                        <div class="profile-plan-info">
+                            <div class="profile-plan-name">${planLabel} Plan</div>
+                            <div class="profile-plan-detail">${limits.days_left} days left · ${limits.mock_remaining} mocks · ${limits.practice_remaining} practice</div>
+                        </div>
+                        <div class="profile-plan-arrow">&#8250;</div>
+                    </div>
+                `;
+            } else if (isPending) {
+                planCardHtml = `
+                    <div class="profile-plan-card pending" id="plan-card">
+                        <div class="profile-plan-icon">&#9203;</div>
+                        <div class="profile-plan-info">
+                            <div class="profile-plan-name">Payment Under Review</div>
+                            <div class="profile-plan-detail">${limits.pending.plan} plan pending</div>
+                        </div>
+                        <div class="profile-plan-arrow">&#8250;</div>
+                    </div>
+                `;
+            } else {
+                planCardHtml = `
+                    <div class="profile-plan-card free" id="plan-card">
+                        <div class="profile-plan-icon">&#127381;</div>
+                        <div class="profile-plan-info">
+                            <div class="profile-plan-name">Free Plan</div>
+                            <div class="profile-plan-detail">${limits.mock_remaining} mocks · ${limits.practice_remaining} practice left</div>
+                        </div>
+                        <div class="profile-plan-arrow">&#8250;</div>
+                    </div>
+                `;
+            }
+        }
+
         const adminBtn = isAdmin ? `
             <button class="btn btn-primary mt-12 mb-12" id="admin-btn">Admin Panel</button>
         ` : '';
@@ -73,6 +120,8 @@ const ProfilePage = {
                     <div class="stat-label">Practice</div>
                 </div>
             </div>
+
+            ${planCardHtml}
 
             ${adminBtn}
 
@@ -127,6 +176,12 @@ const ProfilePage = {
             document.getElementById('admin-btn').addEventListener('click', () => {
                 App.navigate('admin');
             });
+        }
+
+        // Plan card click
+        const planCard = document.getElementById('plan-card');
+        if (planCard) {
+            planCard.addEventListener('click', () => App.navigate('premium'));
         }
 
         // Referral copy

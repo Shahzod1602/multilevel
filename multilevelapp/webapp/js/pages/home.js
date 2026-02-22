@@ -13,7 +13,7 @@ const HomePage = {
         } catch (e) {}
 
         const limitHtml = sessionInfo
-            ? `<div class="daily-limit-badge">${sessionInfo.mock_remaining}/${sessionInfo.mock_limit}${sessionInfo.bonus_mocks ? ` +${sessionInfo.bonus_mocks} bonus` : ''} mock tests left today</div>`
+            ? `<div class="daily-limit-badge">${sessionInfo.mock_remaining}/${sessionInfo.mock_limit} mocks · ${sessionInfo.practice_remaining}/${sessionInfo.practice_limit} practice${sessionInfo.bonus_mocks ? ` · +${sessionInfo.bonus_mocks} bonus` : ''}</div>`
             : '';
 
         container.innerHTML = `
@@ -83,6 +83,11 @@ const HomePage = {
                     <div class="icon" style="background:#D5F5E3;font-size:20px">&#128203;</div>
                     <h3>History</h3>
                     <p>Past sessions</p>
+                </div>
+                <div class="feature-card premium-feature-card" data-action="premium">
+                    <div class="icon" style="background:#FEF3C7;font-size:20px">&#11088;</div>
+                    <h3>Premium</h3>
+                    <p>Upgrade plan</p>
                 </div>
             </div>
         `;
