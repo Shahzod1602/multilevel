@@ -841,7 +841,6 @@ async def send_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     for row in users:
         target_user_id = row["user_id"]
-        if True:
         try:
             await context.bot.send_message(chat_id=target_user_id, text=message)
             logging.info(f"Message sent to {target_user_id} by {user_id}")
