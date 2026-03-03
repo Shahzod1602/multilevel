@@ -1,135 +1,192 @@
 """
 Database helper functions for Multilevel Speaking Practice App.
-Shared between bot (app.py) and web server (web_server.py).
+Uses PostgreSQL via psycopg2 with a connection pool.
 """
-import sqlite3
+import os
 import json
 from datetime import datetime, timedelta
 
-import supabase_sync as sb
+import psycopg2
+import psycopg2.extras
+import psycopg2.pool
 
-DB_NAME = "bot.db"
+_pool = None
+
+
+def _get_pool():
+    global _pool
+    if _pool is None:
+        dsn = os.getenv("DATABASE_URL", "")
+        _pool = psycopg2.pool.ThreadedConnectionPool(minconn=2, maxconn=10, dsn=dsn)
+    return _pool
+
+
+class _Conn:
+    """Wraps a pooled psycopg2 connection. Returns it to pool on close()."""
+
+    def __init__(self, raw):
+        self._raw = raw
+
+    def cursor(self):
+        return self._raw.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    def commit(self):
+        self._raw.commit()
+
+    def rollback(self):
+        self._raw.rollback()
+
+    def close(self):
+        _get_pool().putconn(self._raw)
 
 
 def get_connection():
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=5000")
-    return conn
+    return _Conn(_get_pool().getconn())
+
+
+def _to_dt(val):
+    """Coerce value to datetime (psycopg2 returns datetime, SQLite returns string)."""
+    if val is None:
+        return None
+    if isinstance(val, datetime):
+        return val
+    try:
+        return datetime.fromisoformat(str(val))
+    except (ValueError, TypeError):
+        return None
 
 
 def migrate():
-    """Run all database migrations."""
-    conn = get_connection()
+    """Create/update all tables. Uses autocommit so DDL never rolls back."""
+    dsn = os.getenv("DATABASE_URL", "")
+    conn = psycopg2.connect(dsn)
+    conn.autocommit = True
     c = conn.cursor()
 
-    # Existing tables (from app.py init_db)
-    c.execute('''CREATE TABLE IF NOT EXISTS users (
-        user_id INTEGER PRIMARY KEY,
-        contact TEXT,
-        tariff TEXT DEFAULT 'free',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )''')
-    c.execute('''CREATE TABLE IF NOT EXISTS admins (
-        user_id INTEGER PRIMARY KEY
-    )''')
-    c.execute('''CREATE TABLE IF NOT EXISTS attempts (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        attempt_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users (user_id)
-    )''')
-    c.execute('''CREATE TABLE IF NOT EXISTS ads (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        admin_id INTEGER,
-        image_path TEXT,
-        caption TEXT,
-        schedule_time TIMESTAMP,
-        sent INTEGER DEFAULT 0,
-        FOREIGN KEY (admin_id) REFERENCES admins (user_id)
-    )''')
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            user_id BIGINT PRIMARY KEY,
+            contact TEXT,
+            tariff TEXT DEFAULT 'free',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            first_name TEXT DEFAULT '',
+            username TEXT DEFAULT '',
+            photo_url TEXT DEFAULT '',
+            referral_code TEXT,
+            bonus_mocks INTEGER DEFAULT 0,
+            mock_total INTEGER DEFAULT 7,
+            mock_used INTEGER DEFAULT 0,
+            practice_total INTEGER DEFAULT 50,
+            practice_used INTEGER DEFAULT 0
+        )
+    """)
 
-    # Add new columns to users (safe: no error if already exists)
-    for col, col_type, default in [
-        ("first_name", "TEXT", "''"),
-        ("username", "TEXT", "''"),
-        ("photo_url", "TEXT", "''"),
-    ]:
-        try:
-            c.execute(f"ALTER TABLE users ADD COLUMN {col} {col_type} DEFAULT {default}")
-        except sqlite3.OperationalError:
-            pass  # Column already exists
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS admins (
+            user_id BIGINT PRIMARY KEY
+        )
+    """)
 
-    # New table: sessions
-    c.execute('''CREATE TABLE IF NOT EXISTS sessions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        type TEXT NOT NULL DEFAULT 'practice',
-        part INTEGER DEFAULT 1,
-        status TEXT DEFAULT 'active',
-        score_fluency REAL,
-        score_lexical REAL,
-        score_grammar REAL,
-        score_pronunciation REAL,
-        score_overall REAL,
-        feedback TEXT,
-        started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        completed_at TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users (user_id)
-    )''')
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS attempts (
+            id SERIAL PRIMARY KEY,
+            user_id BIGINT REFERENCES users(user_id),
+            attempt_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
 
-    # New table: responses
-    c.execute('''CREATE TABLE IF NOT EXISTS responses (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        session_id INTEGER NOT NULL,
-        question_text TEXT,
-        transcription TEXT,
-        duration INTEGER DEFAULT 0,
-        part INTEGER DEFAULT 1,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (session_id) REFERENCES sessions (id)
-    )''')
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS ads (
+            id SERIAL PRIMARY KEY,
+            admin_id BIGINT REFERENCES admins(user_id),
+            image_path TEXT,
+            caption TEXT,
+            schedule_time TIMESTAMP,
+            sent INTEGER DEFAULT 0
+        )
+    """)
 
-    # New table: daily_study
-    c.execute('''CREATE TABLE IF NOT EXISTS daily_study (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        date TEXT NOT NULL,
-        minutes INTEGER DEFAULT 0,
-        sessions_count INTEGER DEFAULT 0,
-        UNIQUE(user_id, date),
-        FOREIGN KEY (user_id) REFERENCES users (user_id)
-    )''')
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS sessions (
+            id SERIAL PRIMARY KEY,
+            user_id BIGINT NOT NULL REFERENCES users(user_id),
+            type TEXT NOT NULL DEFAULT 'practice',
+            part TEXT DEFAULT '1.1',
+            status TEXT DEFAULT 'active',
+            score_fluency REAL,
+            score_lexical REAL,
+            score_grammar REAL,
+            score_pronunciation REAL,
+            score_overall REAL,
+            feedback TEXT,
+            started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            completed_at TIMESTAMP
+        )
+    """)
 
-    # New table: user_settings
-    c.execute('''CREATE TABLE IF NOT EXISTS user_settings (
-        user_id INTEGER PRIMARY KEY,
-        dark_mode INTEGER DEFAULT 0,
-        notifications INTEGER DEFAULT 1,
-        language TEXT DEFAULT 'en',
-        daily_goal INTEGER DEFAULT 30,
-        target_score REAL DEFAULT 6.5,
-        FOREIGN KEY (user_id) REFERENCES users (user_id)
-    )''')
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS responses (
+            id SERIAL PRIMARY KEY,
+            session_id INTEGER NOT NULL REFERENCES sessions(id),
+            question_text TEXT,
+            transcription TEXT,
+            duration INTEGER DEFAULT 0,
+            part TEXT DEFAULT '1',
+            debate_side TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
 
-    # Add target_score column if not exists
-    try:
-        c.execute("ALTER TABLE user_settings ADD COLUMN target_score REAL DEFAULT 6.5")
-    except sqlite3.OperationalError:
-        pass
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS daily_study (
+            id SERIAL PRIMARY KEY,
+            user_id BIGINT NOT NULL REFERENCES users(user_id),
+            date TEXT NOT NULL,
+            minutes INTEGER DEFAULT 0,
+            sessions_count INTEGER DEFAULT 0,
+            UNIQUE(user_id, date)
+        )
+    """)
 
-    # Add target_level column if not exists (CEFR level, replaces target_score conceptually)
-    try:
-        c.execute("ALTER TABLE user_settings ADD COLUMN target_level TEXT DEFAULT 'B2'")
-    except sqlite3.OperationalError:
-        pass
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS user_settings (
+            user_id BIGINT PRIMARY KEY REFERENCES users(user_id),
+            dark_mode INTEGER DEFAULT 0,
+            notifications INTEGER DEFAULT 1,
+            language TEXT DEFAULT 'en',
+            daily_goal INTEGER DEFAULT 30,
+            target_score REAL DEFAULT 6.5,
+            target_level TEXT DEFAULT 'B2'
+        )
+    """)
 
-    # Add debate_side column to responses (for Part 3 debate)
-    try:
-        c.execute("ALTER TABLE responses ADD COLUMN debate_side TEXT")
-    except sqlite3.OperationalError:
-        pass
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS referrals (
+            id SERIAL PRIMARY KEY,
+            referrer_id BIGINT NOT NULL REFERENCES users(user_id),
+            referred_id BIGINT NOT NULL REFERENCES users(user_id),
+            rewarded INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS subscriptions (
+            id SERIAL PRIMARY KEY,
+            user_id BIGINT NOT NULL REFERENCES users(user_id),
+            plan TEXT NOT NULL,
+            status TEXT DEFAULT 'pending',
+            started_at TIMESTAMP,
+            expires_at TIMESTAMP,
+            mock_limit INTEGER DEFAULT 0,
+            practice_limit INTEGER DEFAULT 0,
+            mock_used INTEGER DEFAULT 0,
+            practice_used INTEGER DEFAULT 0,
+            amount INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            approved_by BIGINT
+        )
+    """)
 
     # Indexes
     c.execute("CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at)")
@@ -138,17 +195,18 @@ def migrate():
     c.execute("CREATE INDEX IF NOT EXISTS idx_sessions_started_at ON sessions(started_at)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_responses_session_id ON responses(session_id)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_daily_study_user_date ON daily_study(user_id, date)")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id)")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id)")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status)")
+    try:
+        c.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_referral_code ON users(referral_code)")
+    except Exception:
+        pass
 
-    c.execute("INSERT OR IGNORE INTO admins (user_id) VALUES (?)", (5471121432,))
+    # Seed admin
+    c.execute("INSERT INTO admins (user_id) VALUES (5471121432) ON CONFLICT DO NOTHING")
 
-    conn.commit()
     conn.close()
-
-    # Run referral migrations
-    migrate_referrals()
-
-    # Run subscription migrations
-    migrate_subscriptions()
 
 
 def score_to_cefr(score):
@@ -171,44 +229,33 @@ def score_to_cefr(score):
 def get_or_create_user(user_id, first_name="", username="", photo_url=""):
     conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+    c.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
     user = c.fetchone()
     if not user:
         c.execute(
-            "INSERT INTO users (user_id, first_name, username, photo_url) VALUES (?, ?, ?, ?)",
+            "INSERT INTO users (user_id, first_name, username, photo_url) VALUES (%s, %s, %s, %s)",
             (user_id, first_name, username, photo_url)
         )
         conn.commit()
-        c.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+        c.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
         user = c.fetchone()
     else:
-        # Update profile info
         c.execute(
-            "UPDATE users SET first_name=?, username=?, photo_url=? WHERE user_id=?",
+            "UPDATE users SET first_name=%s, username=%s, photo_url=%s WHERE user_id=%s",
             (first_name or user["first_name"], username or user["username"],
              photo_url or user["photo_url"], user_id)
         )
         conn.commit()
-        c.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+        c.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
         user = c.fetchone()
     conn.close()
-    result = dict(user)
-    sb._fire_and_forget(sb.sync_user, user_id=user_id,
-                        first_name=result.get("first_name", ""),
-                        username=result.get("username", ""),
-                        photo_url=result.get("photo_url", ""),
-                        contact=result.get("contact"),
-                        tariff=result.get("tariff", "free"),
-                        referral_code=result.get("referral_code"),
-                        bonus_mocks=result.get("bonus_mocks", 0),
-                        created_at=result.get("created_at"))
-    return result
+    return dict(user)
 
 
 def get_user(user_id):
     conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+    c.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
     user = c.fetchone()
     conn.close()
     return dict(user) if user else None
@@ -219,17 +266,17 @@ def get_user(user_id):
 def get_user_settings(user_id):
     conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT * FROM user_settings WHERE user_id = ?", (user_id,))
+    c.execute("SELECT * FROM user_settings WHERE user_id = %s", (user_id,))
     settings = c.fetchone()
     if not settings:
-        c.execute("INSERT INTO user_settings (user_id) VALUES (?)", (user_id,))
+        c.execute("INSERT INTO user_settings (user_id) VALUES (%s) ON CONFLICT DO NOTHING", (user_id,))
         conn.commit()
-        c.execute("SELECT * FROM user_settings WHERE user_id = ?", (user_id,))
+        c.execute("SELECT * FROM user_settings WHERE user_id = %s", (user_id,))
         settings = c.fetchone()
+        conn.close()
+        return dict(settings)
     conn.close()
-    result = dict(settings)
-    sb._fire_and_forget(sb.sync_user_settings, **result)
-    return result
+    return dict(settings)
 
 
 def update_user_settings(user_id, **kwargs):
@@ -239,14 +286,12 @@ def update_user_settings(user_id, **kwargs):
         return
     conn = get_connection()
     c = conn.cursor()
-    # Ensure row exists
-    c.execute("INSERT OR IGNORE INTO user_settings (user_id) VALUES (?)", (user_id,))
-    set_clause = ", ".join(f"{k}=?" for k in fields)
+    c.execute("INSERT INTO user_settings (user_id) VALUES (%s) ON CONFLICT DO NOTHING", (user_id,))
+    set_clause = ", ".join(f"{k}=%s" for k in fields)
     values = list(fields.values()) + [user_id]
-    c.execute(f"UPDATE user_settings SET {set_clause} WHERE user_id=?", values)
+    c.execute(f"UPDATE user_settings SET {set_clause} WHERE user_id=%s", values)
     conn.commit()
     conn.close()
-    sb._fire_and_forget(sb.sync_user_settings, user_id=user_id, **fields)
 
 
 # ─── Session helpers ───────────────────────────────────────────
@@ -255,21 +300,19 @@ def create_session(user_id, session_type="practice", part="1.1"):
     conn = get_connection()
     c = conn.cursor()
     c.execute(
-        "INSERT INTO sessions (user_id, type, part, status) VALUES (?, ?, ?, 'active')",
+        "INSERT INTO sessions (user_id, type, part, status) VALUES (%s, %s, %s, 'active') RETURNING id",
         (user_id, session_type, part)
     )
-    session_id = c.lastrowid
+    session_id = c.fetchone()["id"]
     conn.commit()
     conn.close()
-    sb._fire_and_forget(sb.sync_session_insert, sqlite_id=session_id,
-                        user_id=user_id, session_type=session_type, part=part)
     return session_id
 
 
 def get_session(session_id):
     conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT * FROM sessions WHERE id = ?", (session_id,))
+    c.execute("SELECT * FROM sessions WHERE id = %s", (session_id,))
     session = c.fetchone()
     conn.close()
     return dict(session) if session else None
@@ -279,81 +322,62 @@ def add_response(session_id, question_text, transcription, duration, part):
     conn = get_connection()
     c = conn.cursor()
     c.execute(
-        "INSERT INTO responses (session_id, question_text, transcription, duration, part) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO responses (session_id, question_text, transcription, duration, part) "
+        "VALUES (%s, %s, %s, %s, %s)",
         (session_id, question_text, transcription, duration, part)
     )
-    response_id = c.lastrowid
     conn.commit()
     conn.close()
-    sb._fire_and_forget(sb.sync_response_insert, sqlite_id=response_id,
-                        session_sqlite_id=session_id,
-                        question_text=question_text,
-                        transcription=transcription,
-                        duration=duration, part=part)
 
 
 def complete_session(session_id, scores, feedback):
     conn = get_connection()
     c = conn.cursor()
+    now = datetime.utcnow()
     c.execute(
         """UPDATE sessions SET
             status='completed',
-            score_fluency=?, score_lexical=?, score_grammar=?,
-            score_pronunciation=?, score_overall=?,
-            feedback=?, completed_at=?
-        WHERE id=?""",
+            score_fluency=%s, score_lexical=%s, score_grammar=%s,
+            score_pronunciation=%s, score_overall=%s,
+            feedback=%s, completed_at=%s
+        WHERE id=%s""",
         (
             scores.get("fluency"), scores.get("lexical"),
             scores.get("grammar"), scores.get("pronunciation"),
-            scores.get("overall"), feedback,
-            datetime.utcnow().isoformat(), session_id
+            scores.get("overall"), feedback, now, session_id
         )
     )
 
     # Update daily_study
-    session = get_session(session_id)
-    if session:
-        today = datetime.utcnow().strftime("%Y-%m-%d")
-        user_id = session["user_id"]
-        started = session["started_at"]
+    c.execute("SELECT user_id, started_at FROM sessions WHERE id = %s", (session_id,))
+    row = c.fetchone()
+    if row:
+        today = now.strftime("%Y-%m-%d")
+        user_id = row["user_id"]
+        started = _to_dt(row["started_at"])
         if started:
-            try:
-                start_dt = datetime.fromisoformat(started)
-                minutes = max(1, int((datetime.utcnow() - start_dt).total_seconds() / 60))
-            except (ValueError, TypeError):
-                minutes = 1
+            minutes = max(1, int((now - started).total_seconds() / 60))
         else:
             minutes = 1
 
         c.execute(
             """INSERT INTO daily_study (user_id, date, minutes, sessions_count)
-               VALUES (?, ?, ?, 1)
+               VALUES (%s, %s, %s, 1)
                ON CONFLICT(user_id, date)
-               DO UPDATE SET minutes = minutes + ?, sessions_count = sessions_count + 1""",
+               DO UPDATE SET
+                   minutes = daily_study.minutes + %s,
+                   sessions_count = daily_study.sessions_count + 1""",
             (user_id, today, minutes, minutes)
         )
 
-        # Sync daily_study to Supabase
-        c.execute("SELECT id, minutes, sessions_count FROM daily_study WHERE user_id=? AND date=?",
-                  (user_id, today))
-        ds_row = c.fetchone()
-        if ds_row:
-            sb._fire_and_forget(sb.sync_daily_study, sqlite_id=ds_row["id"],
-                                user_id=user_id, date=today,
-                                minutes=ds_row["minutes"],
-                                sessions_count=ds_row["sessions_count"])
-
     conn.commit()
     conn.close()
-    sb._fire_and_forget(sb.sync_session_complete, sqlite_id=session_id,
-                        scores=scores, feedback=feedback,
-                        completed_at=datetime.utcnow().isoformat())
 
 
 def get_session_responses(session_id):
     conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT * FROM responses WHERE session_id = ? ORDER BY id", (session_id,))
+    c.execute("SELECT * FROM responses WHERE session_id = %s ORDER BY id", (session_id,))
     rows = c.fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -362,24 +386,25 @@ def get_session_responses(session_id):
 # ─── Progress helpers ──────────────────────────────────────────
 
 def get_weekly_progress(user_id):
-    """Get study data for the last 7 days."""
+    """Get study data for the last 7 days (single query)."""
     conn = get_connection()
     c = conn.cursor()
-    days = []
-    for i in range(6, -1, -1):
-        date = (datetime.utcnow() - timedelta(days=i)).strftime("%Y-%m-%d")
-        c.execute(
-            "SELECT minutes, sessions_count FROM daily_study WHERE user_id=? AND date=?",
-            (user_id, date)
-        )
-        row = c.fetchone()
-        days.append({
-            "date": date,
-            "minutes": row["minutes"] if row else 0,
-            "sessions": row["sessions_count"] if row else 0,
-        })
+    date_list = [(datetime.utcnow() - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(6, -1, -1)]
+    c.execute(
+        "SELECT date, minutes, sessions_count FROM daily_study "
+        "WHERE user_id=%s AND date = ANY(%s)",
+        (user_id, date_list)
+    )
+    rows = {row["date"]: row for row in c.fetchall()}
     conn.close()
-    return days
+    return [
+        {
+            "date": d,
+            "minutes": rows[d]["minutes"] if d in rows else 0,
+            "sessions": rows[d]["sessions_count"] if d in rows else 0,
+        }
+        for d in date_list
+    ]
 
 
 def get_study_streak(user_id):
@@ -388,21 +413,19 @@ def get_study_streak(user_id):
     c = conn.cursor()
     streak = 0
     day = datetime.utcnow()
-    # Check if today has study
     today_str = day.strftime("%Y-%m-%d")
-    c.execute("SELECT 1 FROM daily_study WHERE user_id=? AND date=? AND minutes > 0", (user_id, today_str))
+    c.execute("SELECT 1 FROM daily_study WHERE user_id=%s AND date=%s AND minutes > 0", (user_id, today_str))
     if not c.fetchone():
-        # Check yesterday as start
         day = day - timedelta(days=1)
         yesterday_str = day.strftime("%Y-%m-%d")
-        c.execute("SELECT 1 FROM daily_study WHERE user_id=? AND date=? AND minutes > 0", (user_id, yesterday_str))
+        c.execute("SELECT 1 FROM daily_study WHERE user_id=%s AND date=%s AND minutes > 0", (user_id, yesterday_str))
         if not c.fetchone():
             conn.close()
             return 0
 
     while True:
         date_str = day.strftime("%Y-%m-%d")
-        c.execute("SELECT 1 FROM daily_study WHERE user_id=? AND date=? AND minutes > 0", (user_id, date_str))
+        c.execute("SELECT 1 FROM daily_study WHERE user_id=%s AND date=%s AND minutes > 0", (user_id, date_str))
         if c.fetchone():
             streak += 1
             day -= timedelta(days=1)
@@ -416,7 +439,7 @@ def get_recent_sessions(user_id, limit=10):
     conn = get_connection()
     c = conn.cursor()
     c.execute(
-        "SELECT * FROM sessions WHERE user_id=? AND status='completed' ORDER BY completed_at DESC LIMIT ?",
+        "SELECT * FROM sessions WHERE user_id=%s AND status='completed' ORDER BY completed_at DESC LIMIT %s",
         (user_id, limit)
     )
     rows = c.fetchall()
@@ -425,11 +448,10 @@ def get_recent_sessions(user_id, limit=10):
 
 
 def get_all_sessions(user_id, limit=50):
-    """Get all completed sessions for history."""
     conn = get_connection()
     c = conn.cursor()
     c.execute(
-        "SELECT * FROM sessions WHERE user_id=? AND status='completed' ORDER BY completed_at DESC LIMIT ?",
+        "SELECT * FROM sessions WHERE user_id=%s AND status='completed' ORDER BY completed_at DESC LIMIT %s",
         (user_id, limit)
     )
     rows = c.fetchall()
@@ -438,15 +460,14 @@ def get_all_sessions(user_id, limit=50):
 
 
 def get_session_detail(session_id):
-    """Get session with all responses."""
     conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT * FROM sessions WHERE id = ?", (session_id,))
+    c.execute("SELECT * FROM sessions WHERE id = %s", (session_id,))
     session = c.fetchone()
     if not session:
         conn.close()
         return None
-    c.execute("SELECT * FROM responses WHERE session_id = ? ORDER BY id", (session_id,))
+    c.execute("SELECT * FROM responses WHERE session_id = %s ORDER BY id", (session_id,))
     responses = c.fetchall()
     conn.close()
     result = dict(session)
@@ -457,33 +478,28 @@ def get_session_detail(session_id):
 def get_total_sessions(user_id):
     conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT COUNT(*) as cnt FROM sessions WHERE user_id=? AND status='completed'", (user_id,))
+    c.execute("SELECT COUNT(*) as cnt FROM sessions WHERE user_id=%s AND status='completed'", (user_id,))
     row = c.fetchone()
     conn.close()
     return row["cnt"] if row else 0
 
 
 def get_daily_sessions_count(user_id):
-    """Get number of sessions started today."""
     conn = get_connection()
     c = conn.cursor()
     today = datetime.utcnow().strftime("%Y-%m-%d")
-    c.execute(
-        "SELECT sessions_count FROM daily_study WHERE user_id=? AND date=?",
-        (user_id, today)
-    )
+    c.execute("SELECT sessions_count FROM daily_study WHERE user_id=%s AND date=%s", (user_id, today))
     row = c.fetchone()
     conn.close()
     return row["sessions_count"] if row else 0
 
 
 def get_daily_mock_count(user_id):
-    """Get number of mock sessions started today."""
     conn = get_connection()
     c = conn.cursor()
     today = datetime.utcnow().strftime("%Y-%m-%d")
     c.execute(
-        "SELECT COUNT(*) as cnt FROM sessions WHERE user_id=? AND type='mock' AND date(started_at)=?",
+        "SELECT COUNT(*) as cnt FROM sessions WHERE user_id=%s AND type='mock' AND started_at::date = %s::date",
         (user_id, today)
     )
     row = c.fetchone()
@@ -492,11 +508,14 @@ def get_daily_mock_count(user_id):
 
 
 def get_average_score(user_id, limit=10):
-    """Get average overall score from recent completed sessions."""
     conn = get_connection()
     c = conn.cursor()
     c.execute(
-        "SELECT AVG(score_overall) as avg_score FROM (SELECT score_overall FROM sessions WHERE user_id=? AND status='completed' AND score_overall IS NOT NULL ORDER BY completed_at DESC LIMIT ?)",
+        "SELECT AVG(score_overall) as avg_score FROM ("
+        "  SELECT score_overall FROM sessions "
+        "  WHERE user_id=%s AND status='completed' AND score_overall IS NOT NULL "
+        "  ORDER BY completed_at DESC LIMIT %s"
+        ") sub",
         (user_id, limit)
     )
     row = c.fetchone()
@@ -507,7 +526,7 @@ def get_average_score(user_id, limit=10):
 def get_total_practice_hours(user_id):
     conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT COALESCE(SUM(minutes), 0) as total FROM daily_study WHERE user_id=?", (user_id,))
+    c.execute("SELECT COALESCE(SUM(minutes), 0) as total FROM daily_study WHERE user_id=%s", (user_id,))
     row = c.fetchone()
     conn.close()
     total_minutes = row["total"] if row else 0
@@ -517,20 +536,19 @@ def get_total_practice_hours(user_id):
 # ─── Leaderboard helpers ─────────────────────────────────────
 
 def get_leaderboard(limit=20, min_sessions=3):
-    """Get top users by average overall score, requiring minimum sessions."""
     conn = get_connection()
     c = conn.cursor()
     c.execute("""
         SELECT u.user_id, u.first_name, u.username,
                COUNT(s.id) as sessions,
-               ROUND(AVG(s.score_overall), 1) as avg_score
+               ROUND(AVG(s.score_overall)::numeric, 1) as avg_score
         FROM users u
         JOIN sessions s ON s.user_id = u.user_id
         WHERE s.status = 'completed' AND s.score_overall IS NOT NULL
-        GROUP BY u.user_id
-        HAVING COUNT(s.id) >= ?
+        GROUP BY u.user_id, u.first_name, u.username
+        HAVING COUNT(s.id) >= %s
         ORDER BY avg_score DESC
-        LIMIT ?
+        LIMIT %s
     """, (min_sessions, limit))
     rows = c.fetchall()
     conn.close()
@@ -538,20 +556,19 @@ def get_leaderboard(limit=20, min_sessions=3):
 
 
 def get_user_rank(user_id, min_sessions=3):
-    """Get user's rank among all users with enough sessions."""
     conn = get_connection()
     c = conn.cursor()
     c.execute("""
         SELECT user_id, avg_score, sessions FROM (
             SELECT u.user_id,
-                   ROUND(AVG(s.score_overall), 1) as avg_score,
+                   ROUND(AVG(s.score_overall)::numeric, 1) as avg_score,
                    COUNT(s.id) as sessions
             FROM users u
             JOIN sessions s ON s.user_id = u.user_id
             WHERE s.status = 'completed' AND s.score_overall IS NOT NULL
             GROUP BY u.user_id
-            HAVING COUNT(s.id) >= ?
-        )
+            HAVING COUNT(s.id) >= %s
+        ) ranked
         ORDER BY avg_score DESC
     """, (min_sessions,))
     rows = c.fetchall()
@@ -567,7 +584,7 @@ def get_user_rank(user_id, min_sessions=3):
 def is_admin(user_id):
     conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT 1 FROM admins WHERE user_id = ?", (user_id,))
+    c.execute("SELECT 1 FROM admins WHERE user_id = %s", (user_id,))
     result = c.fetchone()
     conn.close()
     return bool(result)
@@ -581,10 +598,10 @@ def get_admin_stats():
     c.execute("SELECT COUNT(*) as cnt FROM users")
     total_users = c.fetchone()["cnt"]
 
-    c.execute("SELECT COUNT(DISTINCT user_id) as cnt FROM sessions WHERE date(started_at) = ?", (today,))
+    c.execute("SELECT COUNT(DISTINCT user_id) as cnt FROM sessions WHERE started_at::date = %s::date", (today,))
     active_today = c.fetchone()["cnt"]
 
-    c.execute("SELECT COUNT(*) as cnt FROM sessions WHERE date(started_at) = ?", (today,))
+    c.execute("SELECT COUNT(*) as cnt FROM sessions WHERE started_at::date = %s::date", (today,))
     sessions_today = c.fetchone()["cnt"]
 
     c.execute("SELECT COUNT(*) as cnt FROM users WHERE tariff != 'free'")
@@ -608,10 +625,10 @@ def search_users(query, limit=20):
                COUNT(s.id) as sessions
         FROM users u
         LEFT JOIN sessions s ON s.user_id = u.user_id AND s.status = 'completed'
-        WHERE u.first_name LIKE ? OR u.username LIKE ? OR CAST(u.user_id AS TEXT) LIKE ?
-        GROUP BY u.user_id
+        WHERE u.first_name ILIKE %s OR u.username ILIKE %s OR CAST(u.user_id AS TEXT) LIKE %s
+        GROUP BY u.user_id, u.first_name, u.username, u.tariff, u.created_at
         ORDER BY u.created_at DESC
-        LIMIT ?
+        LIMIT %s
     """, (like, like, like, limit))
     rows = c.fetchall()
     conn.close()
@@ -621,44 +638,14 @@ def search_users(query, limit=20):
 def update_user_tariff(user_id, tariff):
     conn = get_connection()
     c = conn.cursor()
-    c.execute("UPDATE users SET tariff = ? WHERE user_id = ?", (tariff, user_id))
+    c.execute("UPDATE users SET tariff = %s WHERE user_id = %s", (tariff, user_id))
     conn.commit()
     conn.close()
-    sb._fire_and_forget(sb.sync_user_tariff, user_id=user_id, tariff=tariff)
 
 
 # ─── Referral helpers ─────────────────────────────────────────
 
-def migrate_referrals():
-    """Create referral tables and columns."""
-    conn = get_connection()
-    c = conn.cursor()
-
-    c.execute('''CREATE TABLE IF NOT EXISTS referrals (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        referrer_id INTEGER NOT NULL,
-        referred_id INTEGER NOT NULL,
-        rewarded INTEGER DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (referrer_id) REFERENCES users (user_id),
-        FOREIGN KEY (referred_id) REFERENCES users (user_id)
-    )''')
-
-    for col, col_type, default in [
-        ("referral_code", "TEXT", "NULL"),
-        ("bonus_mocks", "INTEGER", "0"),
-    ]:
-        try:
-            c.execute(f"ALTER TABLE users ADD COLUMN {col} {col_type} DEFAULT {default}")
-        except sqlite3.OperationalError:
-            pass
-
-    c.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id)")
-    c.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_referral_code ON users(referral_code)")
-
-    conn.commit()
-    conn.close()
-
+# migrate_referrals and migrate_subscriptions are merged into migrate()
 
 def generate_referral_code(user_id):
     """Generate unique 8-char referral code for user."""
@@ -668,24 +655,20 @@ def generate_referral_code(user_id):
     conn = get_connection()
     c = conn.cursor()
 
-    # Check if already has code
-    c.execute("SELECT referral_code FROM users WHERE user_id = ?", (user_id,))
+    c.execute("SELECT referral_code FROM users WHERE user_id = %s", (user_id,))
     row = c.fetchone()
     if row and row["referral_code"]:
         conn.close()
         return row["referral_code"]
 
-    # Generate unique code
     chars = string.ascii_uppercase + string.digits
     for _ in range(10):
         code = ''.join(rnd.choices(chars, k=8))
-        c.execute("SELECT 1 FROM users WHERE referral_code = ?", (code,))
+        c.execute("SELECT 1 FROM users WHERE referral_code = %s", (code,))
         if not c.fetchone():
-            c.execute("UPDATE users SET referral_code = ? WHERE user_id = ?", (code, user_id))
+            c.execute("UPDATE users SET referral_code = %s WHERE user_id = %s", (code, user_id))
             conn.commit()
             conn.close()
-            sb._fire_and_forget(sb.sync_user_field, user_id=user_id,
-                                referral_code=code)
             return code
 
     conn.close()
@@ -697,8 +680,7 @@ def process_referral(referred_id, code):
     conn = get_connection()
     c = conn.cursor()
 
-    # Find referrer
-    c.execute("SELECT user_id FROM users WHERE referral_code = ?", (code,))
+    c.execute("SELECT user_id FROM users WHERE referral_code = %s", (code,))
     row = c.fetchone()
     if not row:
         conn.close()
@@ -709,47 +691,28 @@ def process_referral(referred_id, code):
         conn.close()
         return {"error": "Cannot use your own code"}
 
-    # Check if already referred
-    c.execute("SELECT 1 FROM referrals WHERE referred_id = ?", (referred_id,))
+    c.execute("SELECT 1 FROM referrals WHERE referred_id = %s", (referred_id,))
     if c.fetchone():
         conn.close()
         return {"error": "You have already used a referral code"}
 
-    # Create referral and reward both
-    c.execute("INSERT INTO referrals (referrer_id, referred_id, rewarded) VALUES (?, ?, 1)",
+    c.execute("INSERT INTO referrals (referrer_id, referred_id, rewarded) VALUES (%s, %s, 1)",
               (referrer_id, referred_id))
-    referral_id = c.lastrowid
-    c.execute("UPDATE users SET bonus_mocks = COALESCE(bonus_mocks, 0) + 1 WHERE user_id = ?", (referrer_id,))
-    c.execute("UPDATE users SET bonus_mocks = COALESCE(bonus_mocks, 0) + 1 WHERE user_id = ?", (referred_id,))
+    c.execute("UPDATE users SET bonus_mocks = COALESCE(bonus_mocks, 0) + 1 WHERE user_id = %s", (referrer_id,))
+    c.execute("UPDATE users SET bonus_mocks = COALESCE(bonus_mocks, 0) + 1 WHERE user_id = %s", (referred_id,))
 
     conn.commit()
-
-    # Get updated bonus_mocks for sync
-    c.execute("SELECT COALESCE(bonus_mocks, 0) as bm FROM users WHERE user_id = ?", (referrer_id,))
-    r1 = c.fetchone()
-    c.execute("SELECT COALESCE(bonus_mocks, 0) as bm FROM users WHERE user_id = ?", (referred_id,))
-    r2 = c.fetchone()
     conn.close()
-
-    sb._fire_and_forget(sb.sync_referral_insert, sqlite_id=referral_id,
-                        referrer_id=referrer_id, referred_id=referred_id, rewarded=1)
-    sb._fire_and_forget(sb.sync_user_field, user_id=referrer_id,
-                        bonus_mocks=r1["bm"] if r1 else 1)
-    sb._fire_and_forget(sb.sync_user_field, user_id=referred_id,
-                        bonus_mocks=r2["bm"] if r2 else 1)
     return {"success": True}
 
 
 def get_referral_stats(user_id):
     conn = get_connection()
     c = conn.cursor()
-
-    c.execute("SELECT referral_code, COALESCE(bonus_mocks, 0) as bonus_mocks FROM users WHERE user_id = ?", (user_id,))
+    c.execute("SELECT referral_code, COALESCE(bonus_mocks, 0) as bonus_mocks FROM users WHERE user_id = %s", (user_id,))
     user = c.fetchone()
-
-    c.execute("SELECT COUNT(*) as cnt FROM referrals WHERE referrer_id = ?", (user_id,))
+    c.execute("SELECT COUNT(*) as cnt FROM referrals WHERE referrer_id = %s", (user_id,))
     count = c.fetchone()["cnt"]
-
     conn.close()
     return {
         "referral_code": user["referral_code"] if user else None,
@@ -762,15 +725,12 @@ def use_bonus_mock(user_id):
     """Use one bonus mock. Returns True if bonus was used."""
     conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT COALESCE(bonus_mocks, 0) as bonus FROM users WHERE user_id = ?", (user_id,))
+    c.execute("SELECT COALESCE(bonus_mocks, 0) as bonus FROM users WHERE user_id = %s", (user_id,))
     row = c.fetchone()
     if row and row["bonus"] > 0:
-        c.execute("UPDATE users SET bonus_mocks = bonus_mocks - 1 WHERE user_id = ?", (user_id,))
+        c.execute("UPDATE users SET bonus_mocks = bonus_mocks - 1 WHERE user_id = %s", (user_id,))
         conn.commit()
-        new_bonus = row["bonus"] - 1
         conn.close()
-        sb._fire_and_forget(sb.sync_user_field, user_id=user_id,
-                            bonus_mocks=new_bonus)
         return True
     conn.close()
     return False
@@ -784,85 +744,35 @@ PLANS = {
 }
 
 
-def migrate_subscriptions():
-    """Create subscriptions table and add limit columns to users."""
-    conn = get_connection()
-    c = conn.cursor()
-
-    # Add one-time free-tier limit columns to users
-    for col, col_type, default in [
-        ("mock_total", "INTEGER", "7"),
-        ("mock_used", "INTEGER", "0"),
-        ("practice_total", "INTEGER", "50"),
-        ("practice_used", "INTEGER", "0"),
-    ]:
-        try:
-            c.execute(f"ALTER TABLE users ADD COLUMN {col} {col_type} DEFAULT {default}")
-        except sqlite3.OperationalError:
-            pass
-
-    c.execute('''CREATE TABLE IF NOT EXISTS subscriptions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        plan TEXT NOT NULL,
-        status TEXT DEFAULT 'pending',
-        started_at TIMESTAMP,
-        expires_at TIMESTAMP,
-        mock_limit INTEGER DEFAULT 0,
-        practice_limit INTEGER DEFAULT 0,
-        mock_used INTEGER DEFAULT 0,
-        practice_used INTEGER DEFAULT 0,
-        amount INTEGER DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        approved_by INTEGER,
-        FOREIGN KEY (user_id) REFERENCES users (user_id)
-    )''')
-
-    c.execute("CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id)")
-    c.execute("CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status)")
-
-    conn.commit()
-    conn.close()
-
-
 def create_subscription_request(user_id, plan):
-    """Create a pending subscription request. Prevents duplicate pending requests."""
     if plan not in PLANS:
         return {"error": "Invalid plan"}
 
     conn = get_connection()
     c = conn.cursor()
 
-    # Check for existing pending request
-    c.execute("SELECT id FROM subscriptions WHERE user_id = ? AND status = 'pending'", (user_id,))
+    c.execute("SELECT id FROM subscriptions WHERE user_id = %s AND status = 'pending'", (user_id,))
     if c.fetchone():
         conn.close()
         return {"error": "You already have a pending request"}
 
     plan_info = PLANS[plan]
     c.execute(
-        """INSERT INTO subscriptions (user_id, plan, status, mock_limit, practice_limit, amount)
-           VALUES (?, ?, 'pending', ?, ?, ?)""",
+        "INSERT INTO subscriptions (user_id, plan, status, mock_limit, practice_limit, amount) "
+        "VALUES (%s, %s, 'pending', %s, %s, %s) RETURNING id",
         (user_id, plan, plan_info["mock_limit"], plan_info["practice_limit"], plan_info["amount"])
     )
-    sub_id = c.lastrowid
+    sub_id = c.fetchone()["id"]
     conn.commit()
     conn.close()
-
-    sb._fire_and_forget(sb.sync_subscription_insert, sqlite_id=sub_id,
-                        user_id=user_id, plan=plan, status='pending',
-                        mock_limit=plan_info["mock_limit"],
-                        practice_limit=plan_info["practice_limit"],
-                        amount=plan_info["amount"])
     return {"success": True, "subscription_id": sub_id}
 
 
 def approve_subscription(sub_id, admin_id):
-    """Activate a pending subscription."""
     conn = get_connection()
     c = conn.cursor()
 
-    c.execute("SELECT * FROM subscriptions WHERE id = ? AND status = 'pending'", (sub_id,))
+    c.execute("SELECT * FROM subscriptions WHERE id = %s AND status = 'pending'", (sub_id,))
     sub = c.fetchone()
     if not sub:
         conn.close()
@@ -876,54 +786,41 @@ def approve_subscription(sub_id, admin_id):
     expires = now + timedelta(days=days)
 
     c.execute(
-        """UPDATE subscriptions
-           SET status='active', started_at=?, expires_at=?, approved_by=?, mock_used=0, practice_used=0
-           WHERE id=?""",
-        (now.isoformat(), expires.isoformat(), admin_id, sub_id)
+        "UPDATE subscriptions SET status='active', started_at=%s, expires_at=%s, "
+        "approved_by=%s, mock_used=0, practice_used=0 WHERE id=%s",
+        (now, expires, admin_id, sub_id)
     )
-
-    # Update user tariff
-    c.execute("UPDATE users SET tariff = ? WHERE user_id = ?", (sub["plan"], sub["user_id"]))
+    c.execute("UPDATE users SET tariff = %s WHERE user_id = %s", (sub["plan"], sub["user_id"]))
 
     conn.commit()
     conn.close()
-
-    sb._fire_and_forget(sb.sync_subscription_update, sqlite_id=sub_id,
-                        status='active', started_at=now.isoformat(),
-                        expires_at=expires.isoformat(), approved_by=admin_id)
-    sb._fire_and_forget(sb.sync_user_tariff, user_id=sub["user_id"], tariff=sub["plan"])
-
     return {"success": True, "user_id": sub["user_id"], "plan": sub["plan"],
             "expires_at": expires.isoformat()}
 
 
 def reject_subscription(sub_id):
-    """Cancel/reject a pending subscription."""
     conn = get_connection()
     c = conn.cursor()
 
-    c.execute("SELECT * FROM subscriptions WHERE id = ? AND status = 'pending'", (sub_id,))
+    c.execute("SELECT * FROM subscriptions WHERE id = %s AND status = 'pending'", (sub_id,))
     sub = c.fetchone()
     if not sub:
         conn.close()
         return {"error": "Subscription not found or not pending"}
 
     sub = dict(sub)
-    c.execute("UPDATE subscriptions SET status='cancelled' WHERE id=?", (sub_id,))
+    c.execute("UPDATE subscriptions SET status='cancelled' WHERE id=%s", (sub_id,))
     conn.commit()
     conn.close()
-
-    sb._fire_and_forget(sb.sync_subscription_update, sqlite_id=sub_id, status='cancelled')
     return {"success": True, "user_id": sub["user_id"]}
 
 
 def get_active_subscription(user_id):
-    """Return active subscription, lazy-expiring if past date."""
     conn = get_connection()
     c = conn.cursor()
 
     c.execute(
-        "SELECT * FROM subscriptions WHERE user_id = ? AND status = 'active' ORDER BY id DESC LIMIT 1",
+        "SELECT * FROM subscriptions WHERE user_id = %s AND status = 'active' ORDER BY id DESC LIMIT 1",
         (user_id,)
     )
     sub = c.fetchone()
@@ -933,31 +830,23 @@ def get_active_subscription(user_id):
 
     sub = dict(sub)
 
-    # Check expiration
-    if sub["expires_at"]:
-        try:
-            expires = datetime.fromisoformat(sub["expires_at"])
-            if datetime.utcnow() > expires:
-                c.execute("UPDATE subscriptions SET status='expired' WHERE id=?", (sub["id"],))
-                c.execute("UPDATE users SET tariff='free' WHERE user_id=?", (user_id,))
-                conn.commit()
-                conn.close()
-                sb._fire_and_forget(sb.sync_subscription_update, sqlite_id=sub["id"], status='expired')
-                sb._fire_and_forget(sb.sync_user_tariff, user_id=user_id, tariff='free')
-                return None
-        except (ValueError, TypeError):
-            pass
+    expires = _to_dt(sub.get("expires_at"))
+    if expires and datetime.utcnow() > expires:
+        c.execute("UPDATE subscriptions SET status='expired' WHERE id=%s", (sub["id"],))
+        c.execute("UPDATE users SET tariff='free' WHERE user_id=%s", (user_id,))
+        conn.commit()
+        conn.close()
+        return None
 
     conn.close()
     return sub
 
 
 def get_pending_subscription(user_id):
-    """Return pending subscription for a user."""
     conn = get_connection()
     c = conn.cursor()
     c.execute(
-        "SELECT * FROM subscriptions WHERE user_id = ? AND status = 'pending' ORDER BY id DESC LIMIT 1",
+        "SELECT * FROM subscriptions WHERE user_id = %s AND status = 'pending' ORDER BY id DESC LIMIT 1",
         (user_id,)
     )
     sub = c.fetchone()
@@ -966,56 +855,50 @@ def get_pending_subscription(user_id):
 
 
 def increment_mock_usage(user_id):
-    """Increment mock usage. Check subscription first, fall back to free tier. Returns True if allowed."""
-    # Check active subscription
     sub = get_active_subscription(user_id)
     if sub:
         if sub["mock_used"] >= sub["mock_limit"]:
             return False
         conn = get_connection()
         c = conn.cursor()
-        c.execute("UPDATE subscriptions SET mock_used = mock_used + 1 WHERE id = ?", (sub["id"],))
+        c.execute("UPDATE subscriptions SET mock_used = mock_used + 1 WHERE id = %s", (sub["id"],))
         conn.commit()
         conn.close()
         return True
 
-    # Free tier: check one-time limits
     conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT mock_total, mock_used FROM users WHERE user_id = ?", (user_id,))
+    c.execute("SELECT mock_total, mock_used FROM users WHERE user_id = %s", (user_id,))
     row = c.fetchone()
     if not row:
         conn.close()
         return False
 
     if row["mock_used"] >= row["mock_total"]:
-        # Check bonus mocks
         conn.close()
         return use_bonus_mock(user_id)
 
-    c.execute("UPDATE users SET mock_used = mock_used + 1 WHERE user_id = ?", (user_id,))
+    c.execute("UPDATE users SET mock_used = mock_used + 1 WHERE user_id = %s", (user_id,))
     conn.commit()
     conn.close()
     return True
 
 
 def increment_practice_usage(user_id):
-    """Increment practice usage. Check subscription first, fall back to free tier. Returns True if allowed."""
     sub = get_active_subscription(user_id)
     if sub:
         if sub["practice_used"] >= sub["practice_limit"]:
             return False
         conn = get_connection()
         c = conn.cursor()
-        c.execute("UPDATE subscriptions SET practice_used = practice_used + 1 WHERE id = ?", (sub["id"],))
+        c.execute("UPDATE subscriptions SET practice_used = practice_used + 1 WHERE id = %s", (sub["id"],))
         conn.commit()
         conn.close()
         return True
 
-    # Free tier
     conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT practice_total, practice_used FROM users WHERE user_id = ?", (user_id,))
+    c.execute("SELECT practice_total, practice_used FROM users WHERE user_id = %s", (user_id,))
     row = c.fetchone()
     if not row:
         conn.close()
@@ -1025,28 +908,53 @@ def increment_practice_usage(user_id):
         conn.close()
         return False
 
-    c.execute("UPDATE users SET practice_used = practice_used + 1 WHERE user_id = ?", (user_id,))
+    c.execute("UPDATE users SET practice_used = practice_used + 1 WHERE user_id = %s", (user_id,))
     conn.commit()
     conn.close()
     return True
 
 
 def get_user_limits(user_id):
-    """Return combined limit info (free or subscription)."""
-    sub = get_active_subscription(user_id)
-    pending = get_pending_subscription(user_id)
-    referral_stats = get_referral_stats(user_id)
-    bonus_mocks = referral_stats.get("bonus_mocks", 0)
+    """Return combined limit info (free or subscription). Uses single DB connection."""
+    conn = get_connection()
+    c = conn.cursor()
+
+    c.execute(
+        "SELECT * FROM subscriptions WHERE user_id = %s AND status = 'active' ORDER BY id DESC LIMIT 1",
+        (user_id,)
+    )
+    sub = c.fetchone()
+    sub = dict(sub) if sub else None
 
     if sub:
-        days_left = 0
-        if sub["expires_at"]:
-            try:
-                expires = datetime.fromisoformat(sub["expires_at"])
-                days_left = max(0, (expires - datetime.utcnow()).days)
-            except (ValueError, TypeError):
-                pass
+        expires = _to_dt(sub.get("expires_at"))
+        if expires and datetime.utcnow() > expires:
+            expired_id = sub["id"]
+            c.execute("UPDATE subscriptions SET status='expired' WHERE id=%s", (expired_id,))
+            c.execute("UPDATE users SET tariff='free' WHERE user_id=%s", (user_id,))
+            conn.commit()
+            sub = None
 
+    c.execute(
+        "SELECT * FROM subscriptions WHERE user_id = %s AND status = 'pending' ORDER BY id DESC LIMIT 1",
+        (user_id,)
+    )
+    pending_row = c.fetchone()
+    pending = dict(pending_row) if pending_row else None
+
+    c.execute(
+        "SELECT COALESCE(bonus_mocks, 0) as bonus_mocks, mock_total, mock_used, "
+        "practice_total, practice_used FROM users WHERE user_id = %s",
+        (user_id,)
+    )
+    user_row = c.fetchone()
+    conn.close()
+
+    bonus_mocks = user_row["bonus_mocks"] if user_row else 0
+
+    if sub:
+        expires = _to_dt(sub.get("expires_at"))
+        days_left = max(0, (expires - datetime.utcnow()).days) if expires else 0
         return {
             "plan": sub["plan"],
             "status": "active",
@@ -1058,44 +966,36 @@ def get_user_limits(user_id):
             "practice_remaining": max(0, sub["practice_limit"] - sub["practice_used"]),
             "bonus_mocks": bonus_mocks,
             "days_left": days_left,
-            "expires_at": sub["expires_at"],
+            "expires_at": sub["expires_at"].isoformat() if isinstance(sub["expires_at"], datetime) else sub["expires_at"],
             "pending": None,
         }
 
-    # Free tier
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute("SELECT mock_total, mock_used, practice_total, practice_used FROM users WHERE user_id = ?", (user_id,))
-    row = c.fetchone()
-    conn.close()
-
-    if not row:
+    if not user_row:
         return {
             "plan": "free", "status": "free",
             "mock_used": 0, "mock_limit": 7, "mock_remaining": 7 + bonus_mocks,
             "practice_used": 0, "practice_limit": 50, "practice_remaining": 50,
             "bonus_mocks": bonus_mocks, "days_left": None, "expires_at": None,
-            "pending": dict(pending) if pending else None,
+            "pending": pending,
         }
 
     return {
         "plan": "free",
         "status": "free",
-        "mock_used": row["mock_used"],
-        "mock_limit": row["mock_total"],
-        "mock_remaining": max(0, row["mock_total"] - row["mock_used"]) + bonus_mocks,
-        "practice_used": row["practice_used"],
-        "practice_limit": row["practice_total"],
-        "practice_remaining": max(0, row["practice_total"] - row["practice_used"]),
+        "mock_used": user_row["mock_used"],
+        "mock_limit": user_row["mock_total"],
+        "mock_remaining": max(0, user_row["mock_total"] - user_row["mock_used"]) + bonus_mocks,
+        "practice_used": user_row["practice_used"],
+        "practice_limit": user_row["practice_total"],
+        "practice_remaining": max(0, user_row["practice_total"] - user_row["practice_used"]),
         "bonus_mocks": bonus_mocks,
         "days_left": None,
         "expires_at": None,
-        "pending": dict(pending) if pending else None,
+        "pending": pending,
     }
 
 
 def get_pending_subscriptions():
-    """Admin: list all pending subscriptions with user info."""
     conn = get_connection()
     c = conn.cursor()
     c.execute("""
@@ -1108,3 +1008,12 @@ def get_pending_subscriptions():
     rows = c.fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+# Legacy stubs so migrate() calls don't fail if called elsewhere
+def migrate_referrals():
+    pass
+
+
+def migrate_subscriptions():
+    pass

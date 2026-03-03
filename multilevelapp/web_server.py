@@ -63,8 +63,6 @@ def validate_init_data(init_data: str) -> dict:
         raw_dict[key] = value
         decoded_dict[key] = unquote(value)
 
-    logger.info(f"Auth keys: {sorted(raw_dict.keys())}")
-
     received_hash = raw_dict.pop("hash", None)
     decoded_dict.pop("hash", None)
     if not received_hash:
@@ -80,20 +78,12 @@ def validate_init_data(init_data: str) -> dict:
     dcs_raw = "\n".join(f"{k}={v}" for k, v in sorted(raw_dict.items()))
     hash_raw = hmac.new(secret_key, dcs_raw.encode(), hashlib.sha256).hexdigest()
 
-    logger.info(f"Received hash: {received_hash[:20]}...")
-    logger.info(f"Hash (decoded): {hash_decoded[:20]}...")
-    logger.info(f"Hash (raw/enc): {hash_raw[:20]}...")
-    logger.info(f"Token len={len(TELEGRAM_TOKEN)}, starts={TELEGRAM_TOKEN[:15]}")
-    logger.info(f"DCS decoded (first 300): {dcs_decoded[:300]}")
-
     if hmac.compare_digest(hash_decoded, received_hash):
-        logger.info("Auth OK (decoded values)")
         user_data_str = decoded_dict.get("user")
     elif hmac.compare_digest(hash_raw, received_hash):
-        logger.info("Auth OK (raw values)")
         user_data_str = unquote(raw_dict.get("user", ""))
     else:
-        logger.warning("Hash mismatch — neither decoded nor raw matched")
+        logger.warning("Auth failed: hash mismatch")
         raise HTTPException(status_code=401, detail="Invalid hash")
 
     if not user_data_str:

@@ -407,10 +407,11 @@ def restore_from_supabase():
             c = sl.cursor()
             for r in rows:
                 c.execute(
-                    """INSERT OR IGNORE INTO users
+                    """INSERT INTO users
                        (user_id, contact, tariff, created_at, first_name, username, photo_url, referral_code, bonus_mocks)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (r[0], r[1], r[2] or "free", str(r[3]) if r[3] else None,
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                       ON CONFLICT DO NOTHING""",
+                    (r[0], r[1], r[2] or "free", r[3],
                      r[4] or "", r[5] or "", r[6] or "", r[7], r[8] or 0))
             sl.commit()
             sl.close()
@@ -423,7 +424,7 @@ def restore_from_supabase():
             sl = db_module.get_connection()
             c = sl.cursor()
             for r in rows:
-                c.execute("INSERT OR IGNORE INTO admins (user_id) VALUES (?)", (r[0],))
+                c.execute("INSERT INTO admins (user_id) VALUES (%s) ON CONFLICT DO NOTHING", (r[0],))
             sl.commit()
             sl.close()
             logger.info(f"Restored {len(rows)} admins")
@@ -436,9 +437,10 @@ def restore_from_supabase():
             c = sl.cursor()
             for r in rows:
                 c.execute(
-                    """INSERT OR IGNORE INTO user_settings
+                    """INSERT INTO user_settings
                        (user_id, dark_mode, notifications, language, daily_goal, target_score, target_level)
-                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                       VALUES (%s, %s, %s, %s, %s, %s, %s)
+                       ON CONFLICT DO NOTHING""",
                     (r[0], r[1] or 0, r[2] if r[2] is not None else 1,
                      r[3] or "en", r[4] or 30, r[5] or 6.5, r[6] or "B2"))
             sl.commit()
@@ -462,12 +464,12 @@ def restore_from_supabase():
                        (user_id, type, part, status, score_fluency, score_lexical,
                         score_grammar, score_pronunciation, score_overall, feedback,
                         started_at, completed_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                       RETURNING id""",
                     (r[1], r[2] or "practice", r[3] or "1.1", r[4] or "active",
-                     r[5], r[6], r[7], r[8], r[9], r[10],
-                     str(r[11]) if r[11] else None,
-                     str(r[12]) if r[12] else None))
-                session_id_map[r[0]] = c.lastrowid
+                     r[5], r[6], r[7], r[8], r[9], r[10], r[11], r[12]))
+                new_id = c.fetchone()[0]
+                session_id_map[r[0]] = new_id
             sl.commit()
             sl.close()
             logger.info(f"Restored {len(rows)} sessions")
@@ -485,9 +487,8 @@ def restore_from_supabase():
                 c.execute(
                     """INSERT INTO responses
                        (session_id, question_text, transcription, duration, part, debate_side, created_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                    (session_id, r[2], r[3], r[4] or 0, r[5] or "1", r[6],
-                     str(r[7]) if r[7] else None))
+                       VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                    (session_id, r[2], r[3], r[4] or 0, r[5] or "1", r[6], r[7]))
             sl.commit()
             sl.close()
             logger.info(f"Restored {len(rows)} responses")
@@ -499,8 +500,8 @@ def restore_from_supabase():
             sl = db_module.get_connection()
             c = sl.cursor()
             for r in rows:
-                c.execute("INSERT INTO attempts (user_id, attempt_time) VALUES (?, ?)",
-                          (r[1], str(r[2]) if r[2] else None))
+                c.execute("INSERT INTO attempts (user_id, attempt_time) VALUES (%s, %s)",
+                          (r[1], r[2]))
             sl.commit()
             sl.close()
             logger.info(f"Restored {len(rows)} attempts")
@@ -513,8 +514,9 @@ def restore_from_supabase():
             c = sl.cursor()
             for r in rows:
                 c.execute(
-                    """INSERT OR IGNORE INTO daily_study (user_id, date, minutes, sessions_count)
-                       VALUES (?, ?, ?, ?)""",
+                    """INSERT INTO daily_study (user_id, date, minutes, sessions_count)
+                       VALUES (%s, %s, %s, %s)
+                       ON CONFLICT DO NOTHING""",
                     (r[1], r[2], r[3] or 0, r[4] or 0))
             sl.commit()
             sl.close()
@@ -529,8 +531,8 @@ def restore_from_supabase():
             for r in rows:
                 c.execute(
                     """INSERT INTO referrals (referrer_id, referred_id, rewarded, created_at)
-                       VALUES (?, ?, ?, ?)""",
-                    (r[1], r[2], r[3] or 0, str(r[4]) if r[4] else None))
+                       VALUES (%s, %s, %s, %s)""",
+                    (r[1], r[2], r[3] or 0, r[4]))
             sl.commit()
             sl.close()
             logger.info(f"Restored {len(rows)} referrals")
@@ -544,8 +546,8 @@ def restore_from_supabase():
             for r in rows:
                 c.execute(
                     """INSERT INTO ads (admin_id, image_path, caption, schedule_time, sent)
-                       VALUES (?, ?, ?, ?, ?)""",
-                    (r[1], r[2], r[3], str(r[4]) if r[4] else None, r[5] or 0))
+                       VALUES (%s, %s, %s, %s, %s)""",
+                    (r[1], r[2], r[3], r[4], r[5] or 0))
             sl.commit()
             sl.close()
             logger.info(f"Restored {len(rows)} ads")

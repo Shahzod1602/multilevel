@@ -6,6 +6,7 @@ import sys
 import asyncio
 import logging
 import threading
+import time
 import runpy
 
 from dotenv import load_dotenv
@@ -23,6 +24,23 @@ logging.getLogger().addHandler(console)
 
 logger = logging.getLogger(__name__)
 
+SYNC_INTERVAL_HOURS = 2
+
+
+def run_supabase_sync_loop():
+    """Background thread: sync local PostgreSQL → Supabase every N hours."""
+    import supabase_sync as sb
+    # Wait before first sync (let the app fully start)
+    time.sleep(60)
+    while True:
+        try:
+            logger.info("Starting scheduled Supabase sync...")
+            sb.full_sync_to_supabase()
+            logger.info("Scheduled Supabase sync completed.")
+        except Exception as e:
+            logger.error(f"Scheduled Supabase sync failed: {e}")
+        time.sleep(SYNC_INTERVAL_HOURS * 3600)
+
 
 def run_web_server():
     """Run FastAPI server in a separate thread."""
@@ -34,8 +52,13 @@ def run_web_server():
     # Run migrations
     db.migrate()
 
-    # Restore from Supabase if SQLite is empty (e.g. after server migration)
+    # Restore from Supabase if local DB is empty (e.g. after fresh deploy)
     sb.restore_from_supabase()
+
+    # Start periodic Supabase backup
+    sync_thread = threading.Thread(target=run_supabase_sync_loop, daemon=True, name="supabase-sync")
+    sync_thread.start()
+    logger.info(f"Supabase sync scheduler started (every {SYNC_INTERVAL_HOURS}h)")
 
     port = int(os.getenv("WEB_PORT", "8000"))
     logger.info(f"Starting web server on port {port}...")

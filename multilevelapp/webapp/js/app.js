@@ -7,6 +7,27 @@ const App = {
     container: null,
     isSubscribed: false,
 
+    // Cache subscription status to avoid checking on every navigation
+    _subCheckedAt: 0,
+    _subCacheTtl: 5 * 60 * 1000, // 5 minutes
+
+    async _checkSubscription(force = false) {
+        const now = Date.now();
+        if (!force && this.isSubscribed && (now - this._subCheckedAt) < this._subCacheTtl) {
+            return true;
+        }
+        try {
+            const subData = await API.get('/api/check-subscription');
+            this.isSubscribed = subData.subscribed;
+            this._channelUrl = subData.channel_url;
+            this._subCheckedAt = now;
+        } catch (err) {
+            console.warn('Subscription check failed:', err);
+            this.isSubscribed = false;
+        }
+        return this.isSubscribed;
+    },
+
     async init() {
         this.container = document.getElementById('page-container');
 
@@ -17,15 +38,21 @@ const App = {
             tg.expand();
             tg.setHeaderColor('#F5F5F7');
             tg.setBackgroundColor('#F5F5F7');
-            console.log('initData length:', tg.initData?.length);
-            console.log('initData:', tg.initData?.substring(0, 100));
         } else {
             console.warn('Telegram WebApp not available');
         }
 
-        // Load user data
+        // Load user data and check subscription in parallel
         try {
-            this.userData = await API.get('/api/user/me');
+            const [userData, subData] = await Promise.all([
+                API.get('/api/user/me'),
+                API.get('/api/check-subscription'),
+            ]);
+
+            this.userData = userData;
+            this.isSubscribed = subData.subscribed;
+            this._channelUrl = subData.channel_url;
+            this._subCheckedAt = Date.now();
 
             // Apply dark mode from settings
             if (this.userData?.settings?.dark_mode) {
@@ -37,16 +64,6 @@ const App = {
             }
         } catch (err) {
             console.warn('Failed to load user data:', err);
-        }
-
-        // Check channel subscription
-        try {
-            const subData = await API.get('/api/check-subscription');
-            this.isSubscribed = subData.subscribed;
-            this._channelUrl = subData.channel_url;
-        } catch (err) {
-            console.warn('Subscription check failed:', err);
-            this.isSubscribed = false;
         }
 
         if (!this.isSubscribed) {
@@ -88,9 +105,8 @@ const App = {
             btn.disabled = true;
 
             try {
-                const subData = await API.get('/api/check-subscription');
-                if (subData.subscribed) {
-                    this.isSubscribed = true;
+                const subscribed = await this._checkSubscription(true); // force re-check
+                if (subscribed) {
                     this.navigate('home');
                 } else {
                     btn.textContent = 'Obuna topilmadi. Qayta tekshirish';
@@ -104,17 +120,9 @@ const App = {
     },
 
     async navigate(page, params = {}) {
-        // Re-check subscription on every navigation
-        try {
-            const subData = await API.get('/api/check-subscription');
-            if (!subData.subscribed) {
-                this.isSubscribed = false;
-                this._channelUrl = subData.channel_url;
-                this.showSubscriptionWall();
-                return;
-            }
-        } catch (err) {
-            // If check fails, block access
+        // Check subscription with cache (avoid Telegram API call on every nav)
+        const subscribed = await this._checkSubscription();
+        if (!subscribed) {
             this.showSubscriptionWall();
             return;
         }
