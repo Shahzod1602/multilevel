@@ -385,8 +385,8 @@ def restore_from_supabase():
 
     sl = db_module.get_connection()
     c = sl.cursor()
-    c.execute("SELECT COUNT(*) FROM users")
-    user_count = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) AS cnt FROM users")
+    user_count = c.fetchone()["cnt"]
     sl.close()
 
     if user_count > 0:
@@ -468,7 +468,7 @@ def restore_from_supabase():
                        RETURNING id""",
                     (r[1], r[2] or "practice", r[3] or "1.1", r[4] or "active",
                      r[5], r[6], r[7], r[8], r[9], r[10], r[11], r[12]))
-                new_id = c.fetchone()[0]
+                new_id = c.fetchone()["id"]
                 session_id_map[r[0]] = new_id
             sl.commit()
             sl.close()
