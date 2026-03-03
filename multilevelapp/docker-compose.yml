@@ -1,37 +1,15 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: multilevel-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: multilevel
-      POSTGRES_USER: multilevel
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - multilevel_web
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U multilevel"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   app:
     build: .
     container_name: multilevel-app
     restart: unless-stopped
     env_file: .env
-    depends_on:
-      postgres:
-        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8000:8000"
     networks:
       - multilevel_web
-
-volumes:
-  postgres_data:
 
 networks:
   multilevel_web:
