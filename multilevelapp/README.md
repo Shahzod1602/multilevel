@@ -24,7 +24,7 @@ Telegram Mini App for practicing IELTS Speaking exam with AI-powered feedback.
 |-----------|-----------|
 | Backend | Python, FastAPI, Uvicorn |
 | Bot | python-telegram-bot |
-| Database | SQLite |
+| Database | PostgreSQL (local) + Supabase (backup) |
 | Frontend | Vanilla JS SPA |
 | Speech-to-Text | Groq Whisper Large V3 |
 | AI Scoring | OpenAI GPT-4o-mini |
@@ -39,21 +39,23 @@ Telegram Mini App (Browser)
         |
      Nginx (SSL)
         |
-   FastAPI (port 8080)
+   FastAPI (port 8000)
     /         \
-SQLite     External APIs
-           - Groq (Whisper)
-           - OpenAI (GPT-4o-mini)
-           - Edge TTS
+PostgreSQL   External APIs
+(local host) - Groq (Whisper)
+     |         - OpenAI (GPT-4o-mini)
+  Supabase     - Edge TTS
+ (backup/2h)
 ```
 
 ## Project Structure
 
 ```
-ieltspeakapp/
+multilevelapp/
 ├── app.py              # Telegram bot
 ├── web_server.py       # FastAPI REST API
-├── db.py               # Database helpers (SQLite)
+├── db.py               # Database helpers (PostgreSQL + connection pool)
+├── supabase_sync.py    # Supabase backup/restore (every 2 hours)
 ├── run.py              # Entry point (starts bot + web server)
 ├── questions.json      # IELTS question bank
 ├── bot.db              # SQLite database
@@ -92,7 +94,9 @@ OPENAI_API_KEY=your_openai_key
 GROQ_API_KEY=your_groq_key
 CHANNEL_USERNAME=@your_channel
 WEBAPP_URL=https://your-domain.com
-WEB_PORT=8080
+WEB_PORT=8000
+DATABASE_URL=postgresql://multilevel:password@host.docker.internal:5432/multilevel
+SUPABASE_DB_URL=postgresql://postgres.xxx:password@aws-region.pooler.supabase.com:6543/postgres
 ```
 
 ### 2. Deploy with Docker
@@ -187,3 +191,37 @@ Average user: **2 mock tests + 10 practice sessions / month**
 | 1,000 | $80 | $12 | **$92/mo** |
 
 > Groq has a generous free tier. With free tier, cost drops to ~$0.001/user/month (OpenAI only).
+
+## Changelog
+
+### 2026-03-03 — Performance & PostgreSQL Migration
+
+**Database migration: SQLite → PostgreSQL**
+- `db.py` completely rewritten using `psycopg2` with `ThreadedConnectionPool(2, 10)`
+- `_Conn` wrapper returns connections back to pool automatically
+- All `?` placeholders → `%s`, `AUTOINCREMENT` → `SERIAL`, `INSERT OR IGNORE` → `ON CONFLICT DO NOTHING`
+- `lastrowid` → `RETURNING id` for insert ID retrieval
+- `RealDictCursor` for dict-style row access everywhere
+
+**Supabase demoted to backup-only**
+- Removed all real-time `sb._fire_and_forget(...)` sync calls from db.py (was causing ~500ms delay on every DB write)
+- Supabase now syncs in background every 2 hours via `run_supabase_sync_loop()` in `run.py`
+- On fresh deploy, data is restored from Supabase automatically (`restore_from_supabase()`)
+
+**Query optimizations**
+- `get_weekly_progress`: 7 separate queries → 1 query using `ANY(%s)`
+- `get_user_limits`: 4 separate DB connections → 1 connection
+- User settings: sync only on first create, not on every read
+
+**Frontend performance (webapp/js/app.js)**
+- Parallel API calls on init: `Promise.all([/api/user/me, /api/check-subscription])`
+- Subscription check cache (5-minute TTL) — no API call on every page navigation
+- Force re-check only when user clicks "Tekshirish" button
+- Removed verbose `console.log` of initData
+
+**Backend (web_server.py)**
+- Removed 6 verbose `logger.info` lines from `validate_init_data()` (runs on every request)
+
+**Deployment**
+- `docker-compose.yml`: removed PostgreSQL container, added `extra_hosts: host.docker.internal:host-gateway` to connect to host's PostgreSQL
+- PostgreSQL installed on host server with dedicated `multilevel` user and database
