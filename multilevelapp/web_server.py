@@ -14,6 +14,7 @@ from datetime import datetime
 from urllib.parse import parse_qs, unquote
 
 from fastapi import FastAPI, Request, HTTPException, Depends, UploadFile, File, Form
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
@@ -21,10 +22,20 @@ from typing import Optional
 
 import aiohttp
 import db
+import mobile_auth
 
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Multilevel Speaking Practice")
+
+# CORS for the Capacitor mobile app. Telegram Mini App is same-origin.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"^(capacitor|ionic|https?)://(localhost|app\.multilevel\.local)(:\d+)?$",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 OPENAI_KEY = os.getenv("OPENAI_API_KEY", "")
@@ -94,19 +105,36 @@ def validate_init_data(init_data: str) -> dict:
 
 
 async def get_current_user(request: Request) -> dict:
-    """Dependency: extract and validate user from Authorization header."""
+    """Dependency: accept either Telegram initData (`tma ...`) or a JWT (`Bearer ...`)."""
     auth = request.headers.get("Authorization", "")
-
-    # Support both "tma <data>" and raw initData
-    if auth.startswith("tma "):
-        init_data = auth[4:]
-    elif auth:
-        init_data = auth
-    else:
+    if not auth:
         raise HTTPException(status_code=401, detail="Missing authorization")
 
-    user_data = validate_init_data(init_data)
+    # Native mobile app path — JWT issued by the bot's mlogin handler.
+    if auth.startswith("Bearer "):
+        token = auth[7:].strip()
+        user_id = mobile_auth.verify_token(token)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+        existing = db.get_user(user_id) if hasattr(db, "get_user") else None
+        first_name = existing.get("first_name", "") if existing else ""
+        username = existing.get("username", "") if existing else ""
+        photo_url = existing.get("photo_url", "") if existing else ""
+        user = db.get_or_create_user(
+            user_id=user_id,
+            first_name=first_name,
+            username=username,
+            photo_url=photo_url,
+        )
+        return user
 
+    # Telegram Mini App path (existing behaviour)
+    if auth.startswith("tma "):
+        init_data = auth[4:]
+    else:
+        init_data = auth
+
+    user_data = validate_init_data(init_data)
     user = db.get_or_create_user(
         user_id=user_data["id"],
         first_name=user_data.get("first_name", ""),
@@ -114,6 +142,25 @@ async def get_current_user(request: Request) -> dict:
         photo_url=user_data.get("photo_url", ""),
     )
     return user
+
+
+# ─── Mobile auth endpoints ─────────────────────────────────────
+
+@app.post("/api/auth/start")
+async def auth_start():
+    """Step 1: native app requests a one-time login state."""
+    return {"state": mobile_auth.create_state()}
+
+
+@app.get("/api/auth/exchange")
+async def auth_exchange(state: str):
+    """Step 4: native app polls until the bot has confirmed the state."""
+    user_id = mobile_auth.consume_state(state)
+    if user_id is None:
+        # Pending or expired — 404 so the client treats it as "keep polling"
+        raise HTTPException(status_code=404, detail="Pending")
+    token = mobile_auth.issue_token(user_id)
+    return {"token": token}
 
 
 # ─── Models ────────────────────────────────────────────────────
@@ -1059,3 +1106,11 @@ if os.path.isdir(webapp_dir):
     @app.get("/")
     async def serve_index():
         return FileResponse(os.path.join(webapp_dir, "index.html"))
+
+    @app.get("/privacy")
+    @app.get("/privacy.html")
+    async def serve_privacy():
+        return FileResponse(
+            os.path.join(webapp_dir, "privacy.html"),
+            media_type="text/html",
+        )

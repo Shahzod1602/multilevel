@@ -1,5 +1,5 @@
 /**
- * Main app — router, initialization, Telegram WebApp integration.
+ * Main app — router, initialization, Telegram WebApp + Capacitor integration.
  */
 const App = {
     currentPage: 'home',
@@ -7,7 +7,6 @@ const App = {
     container: null,
     isSubscribed: false,
 
-    // Cache subscription status to avoid checking on every navigation
     _subCheckedAt: 0,
     _subCacheTtl: 5 * 60 * 1000, // 5 minutes
 
@@ -31,6 +30,14 @@ const App = {
     async init() {
         this.container = document.getElementById('page-container');
 
+        // Capacitor (native mobile app) setup — must come before any API call
+        const isNative = API.isCapacitor();
+        if (isNative) {
+            API.setBaseUrl(Config.apiBaseUrl);
+            API.loadJwt();
+            this.setupDeepLinks();
+        }
+
         // Telegram WebApp setup
         if (window.Telegram?.WebApp) {
             const tg = window.Telegram.WebApp;
@@ -38,8 +45,14 @@ const App = {
             tg.expand();
             tg.setHeaderColor('#F5F5F7');
             tg.setBackgroundColor('#F5F5F7');
-        } else {
+        } else if (!isNative) {
             console.warn('Telegram WebApp not available');
+        }
+
+        // Native app + no token → login page
+        if (isNative && !API.jwtToken) {
+            this.navigate('login');
+            return;
         }
 
         // Load user data and check subscription in parallel
@@ -54,7 +67,6 @@ const App = {
             this._channelUrl = subData.channel_url;
             this._subCheckedAt = Date.now();
 
-            // Apply dark mode from settings
             if (this.userData?.settings?.dark_mode) {
                 document.body.classList.add('dark');
                 if (window.Telegram?.WebApp) {
@@ -64,6 +76,10 @@ const App = {
             }
         } catch (err) {
             console.warn('Failed to load user data:', err);
+            if (isNative) {
+                this.navigate('login');
+                return;
+            }
         }
 
         if (!this.isSubscribed) {
@@ -71,8 +87,43 @@ const App = {
             return;
         }
 
-        // Navigate to home
         this.navigate('home');
+    },
+
+    setupDeepLinks() {
+        const CapApp = window.Capacitor?.Plugins?.App;
+        if (!CapApp) return;
+
+        CapApp.addListener('appUrlOpen', (event) => {
+            try {
+                const url = new URL(event.url);
+                const token = url.searchParams.get('token');
+                if (token) {
+                    API.setJwt(token);
+                    this.init();
+                }
+            } catch (e) {
+                console.warn('Bad deep link:', event.url, e);
+            }
+        });
+
+        // When the user returns from Telegram, immediately drive the login
+        // exchange instead of waiting for the next 2s poll tick.
+        CapApp.addListener('appStateChange', ({ isActive }) => {
+            if (!isActive) return;
+            if (this.currentPage === 'login' && !API.jwtToken && window.LoginPage) {
+                window.LoginPage.tryExchangeOnce();
+            } else if (!API.jwtToken && window.LoginPage) {
+                const stored = window.LoginPage.loadState();
+                if (stored.state) window.LoginPage.tryExchangeOnce();
+            }
+        });
+    },
+
+    logout() {
+        API.setJwt(null);
+        this.userData = null;
+        this.navigate('login');
     },
 
     showSubscriptionWall() {
@@ -105,7 +156,7 @@ const App = {
             btn.disabled = true;
 
             try {
-                const subscribed = await this._checkSubscription(true); // force re-check
+                const subscribed = await this._checkSubscription(true);
                 if (subscribed) {
                     this.navigate('home');
                 } else {
@@ -120,16 +171,17 @@ const App = {
     },
 
     async navigate(page, params = {}) {
-        // Check subscription with cache (avoid Telegram API call on every nav)
-        const subscribed = await this._checkSubscription();
-        if (!subscribed) {
-            this.showSubscriptionWall();
-            return;
+        // Login page is the gate — never gate-check it against subscription.
+        if (page !== 'login') {
+            const subscribed = await this._checkSubscription();
+            if (!subscribed) {
+                this.showSubscriptionWall();
+                return;
+            }
         }
 
         this.currentPage = page;
 
-        // Show/hide navbar based on page
         const mainPages = ['home', 'progress', 'profile'];
         const navbar = document.getElementById('navbar');
         if (mainPages.includes(page)) {
@@ -139,11 +191,12 @@ const App = {
             navbar.classList.add('hidden');
         }
 
-        // Scroll to top
         window.scrollTo(0, 0);
 
-        // Route to page
         switch (page) {
+            case 'login':
+                LoginPage.render(this.container);
+                break;
             case 'home':
                 HomePage.render(this.container);
                 break;
@@ -192,7 +245,9 @@ const App = {
     }
 };
 
-// Start app when DOM is ready
+// Expose for API client to call back on 401
+window.App = App;
+
 document.addEventListener('DOMContentLoaded', () => {
     App.init();
 });

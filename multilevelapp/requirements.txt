@@ -10,3 +10,4 @@ uvicorn[standard]
 python-multipart
 edge-tts
 psycopg2-binary>=2.9.0
+PyJWT

@@ -7,3 +7,26 @@ user_*_responses.json
 bot.db
 venv/
 .claude/
+
+# Capacitor / mobile build
+node_modules/
+ios/
+.DS_Store
+*.apk
+*.aab
+
+# Android — keep source, ignore build artifacts
+android/.gradle/
+android/.idea/
+android/build/
+android/app/build/
+android/captures/
+android/local.properties
+android/app/release/
+android/app/debug/
+
+# Release signing — NEVER commit
+android/keystore.properties
+android/keystore/
+*.jks
+*.keystore

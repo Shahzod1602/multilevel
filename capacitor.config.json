@@ -1,0 +1,23 @@
+{
+  "appId": "com.multilevel.app",
+  "appName": "Multilevel Speaking",
+  "webDir": "multilevelapp/webapp",
+  "server": {
+    "androidScheme": "https",
+    "iosScheme": "https",
+    "hostname": "app.multilevel.local",
+    "allowNavigation": [
+      "*.telegram.org",
+      "telegram.org",
+      "t.me"
+    ]
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  }
+}

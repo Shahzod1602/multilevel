@@ -2232,3 +2232,85 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
 .dark .premium-feature-card {
     border-color: #FDCB6E;
 }
+
+/* ─── Login Page (mobile native only) ───────────────────────── */
+.login-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: #F5F5F7;
+}
+.login-card {
+    width: 100%;
+    max-width: 360px;
+    background: #FFFFFF;
+    border-radius: 16px;
+    padding: 32px 24px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    text-align: center;
+}
+.login-logo {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: #7C3AED;
+    margin-bottom: 16px;
+    text-transform: uppercase;
+}
+.login-card h1 {
+    font-size: 28px;
+    color: #1A1A2E;
+    margin-bottom: 8px;
+}
+.login-sub {
+    color: #6B7280;
+    font-size: 15px;
+    margin-bottom: 24px;
+}
+.login-btn {
+    width: 100%;
+    padding: 14px;
+    background: #2AABEE;
+    color: #fff;
+    border: 0;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.2s ease;
+}
+.login-btn:hover { opacity: 0.92; }
+.login-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.login-status {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+.login-status.hidden { display: none; }
+.login-spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid #E5E7EB;
+    border-top-color: #7C3AED;
+    border-radius: 50%;
+    animation: login-spin 0.8s linear infinite;
+}
+@keyframes login-spin { to { transform: rotate(360deg); } }
+.login-cancel {
+    background: none;
+    border: 0;
+    color: #6B7280;
+    font-size: 14px;
+    cursor: pointer;
+    text-decoration: underline;
+}
+.login-hint {
+    margin-top: 20px;
+    color: #6B7280;
+    font-size: 13px;
+    line-height: 1.4;
+}

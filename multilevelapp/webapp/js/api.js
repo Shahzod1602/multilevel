@@ -1,8 +1,44 @@
 /**
- * API client with Telegram Mini App auth.
+ * API client.
+ * Supports two environments:
+ *   - Telegram Mini App: uses initData header `tma <init_data>`
+ *   - Native mobile app (Capacitor): uses JWT header `Bearer <jwt>`
  */
 const API = {
     baseUrl: '',
+    jwtToken: null,
+
+    isCapacitor() {
+        return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+    },
+
+    isTelegram() {
+        return !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData);
+    },
+
+    setBaseUrl(url) {
+        this.baseUrl = url || '';
+    },
+
+    setJwt(token) {
+        this.jwtToken = token;
+        try {
+            if (token) {
+                localStorage.setItem('jwt', token);
+            } else {
+                localStorage.removeItem('jwt');
+            }
+        } catch (e) {}
+    },
+
+    loadJwt() {
+        try {
+            this.jwtToken = localStorage.getItem('jwt');
+        } catch (e) {
+            this.jwtToken = null;
+        }
+        return this.jwtToken;
+    },
 
     getInitData() {
         if (window.Telegram && window.Telegram.WebApp) {
@@ -11,14 +47,21 @@ const API = {
         return '';
     },
 
-    async request(path, options = {}) {
-        const initData = this.getInitData();
-        const headers = {
-            'Authorization': `tma ${initData}`,
-            ...options.headers,
-        };
+    buildAuthHeader() {
+        if (this.isTelegram()) {
+            return `tma ${this.getInitData()}`;
+        }
+        if (this.jwtToken) {
+            return `Bearer ${this.jwtToken}`;
+        }
+        return '';
+    },
 
-        // Don't set Content-Type for FormData (browser sets boundary automatically)
+    async request(path, options = {}) {
+        const authHeader = this.buildAuthHeader();
+        const headers = { ...(options.headers || {}) };
+        if (authHeader) headers['Authorization'] = authHeader;
+
         if (!(options.body instanceof FormData)) {
             headers['Content-Type'] = 'application/json';
         }
@@ -27,6 +70,13 @@ const API = {
             ...options,
             headers,
         });
+
+        if (resp.status === 401 && this.isCapacitor()) {
+            this.setJwt(null);
+            if (window.App && typeof window.App.navigate === 'function') {
+                window.App.navigate('login');
+            }
+        }
 
         if (!resp.ok) {
             const err = await resp.json().catch(() => ({ detail: 'Request failed' }));

@@ -154,9 +154,25 @@ async def save_response_to_file(user_id, response_data):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
 
-    # Handle referral deep link: /start ref_XXXXXXXX
+    # Handle deep links
     if context.args and len(context.args) > 0:
         arg = context.args[0]
+
+        # Mobile-app login: /start mlogin_<state>
+        if arg.startswith("mlogin_"):
+            state = arg[len("mlogin_"):]
+            import mobile_auth
+            if mobile_auth.complete_login(state, user_id):
+                await update.message.reply_text(
+                    "✅ Logged in. You can return to the Multilevel Speaking app now."
+                )
+            else:
+                await update.message.reply_text(
+                    "⏱ This login link expired. Open the app and try again."
+                )
+            logging.info(f"User {user_id} completed mobile login (state={state[:8]}…)")
+            return
+
         if arg.startswith("ref_"):
             referral_code = arg[4:].upper()
             try:
